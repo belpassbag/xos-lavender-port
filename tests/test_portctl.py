@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,21 @@ SPEC.loader.exec_module(portctl)
 
 
 class PortCtlTests(unittest.TestCase):
+    @staticmethod
+    def zip_source(path: Path, entries: dict[str, bytes], extract_entries: list[str]) -> dict:
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, payload in entries.items():
+                archive.writestr(name, payload)
+        return {
+            "filename": path.name,
+            "parts_prefix": "fixture.part-",
+            "size": path.stat().st_size,
+            "sha256": portctl.sha256_file(path),
+            "required_zip_entries": list(entries),
+            "extract_entries": extract_entries,
+            "expected_entry_sizes": {name: len(payload) for name, payload in entries.items()},
+        }
+
     def test_repository_configuration_is_valid(self) -> None:
         config = portctl.load_config(REPOSITORY_ROOT / "config" / "port.toml")
         self.assertEqual(config["base"]["device"], "lavender")
@@ -101,6 +117,56 @@ class PortCtlTests(unittest.TestCase):
             manifest.write_text(f"{'0' * 64}  ../outside.part-000\n", encoding="utf-8")
             with self.assertRaises(portctl.PortError):
                 portctl.parse_checksum_manifest(manifest)
+
+    def test_audits_and_extracts_allowlisted_zip_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            archive_path = root / "fixture.zip"
+            entries = {
+                "system.new.dat.br": b"system-payload",
+                "META-INF/com/android/metadata": b"metadata",
+            }
+            source = self.zip_source(archive_path, entries, ["system.new.dat.br"])
+
+            report = portctl.audit_zip(archive_path, source)
+            destination = portctl.extract_source(archive_path, root / "out", "base", source)
+
+            self.assertEqual(report["entry_count"], 2)
+            self.assertEqual((destination / "system.new.dat.br").read_bytes(), b"system-payload")
+            self.assertFalse((destination / "META-INF/com/android/metadata").exists())
+            self.assertTrue((destination / "extraction-manifest.json").is_file())
+
+    def test_rejects_unsafe_zip_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            archive_path = root / "unsafe.zip"
+            entries = {"safe.txt": b"safe", "../escape.txt": b"escape"}
+            source = self.zip_source(archive_path, entries, ["safe.txt"])
+
+            with self.assertRaises(portctl.PortError):
+                portctl.audit_zip(archive_path, source)
+
+    def test_rejects_unexpected_zip_entry_size(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            archive_path = root / "fixture.zip"
+            source = self.zip_source(archive_path, {"required.txt": b"data"}, ["required.txt"])
+            source["expected_entry_sizes"]["required.txt"] = 99
+
+            with self.assertRaises(portctl.PortError):
+                portctl.audit_zip(archive_path, source)
+
+    def test_rejects_symlink_in_extraction_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            archive_path = root / "fixture.zip"
+            source = self.zip_source(archive_path, {"nested/file.txt": b"data"}, ["nested/file.txt"])
+            destination_root = root / "out" / "base"
+            destination_root.mkdir(parents=True)
+            (destination_root / "nested").symlink_to(root)
+
+            with self.assertRaises(portctl.PortError):
+                portctl.extract_source(archive_path, root / "out", "base", source)
 
 
 if __name__ == "__main__":

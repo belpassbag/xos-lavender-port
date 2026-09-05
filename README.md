@@ -46,6 +46,18 @@ project scope.
    python3 tools/portctl.py assemble donor --parts-dir incoming --output-dir work/sources
    ```
 
+4. Audit the reconstructed archives and extract only the case-approved payloads:
+
+   ```bash
+   python3 tools/portctl.py audit-zip base work/sources/lineage-18.1-20221025-nightly-lavender-signed.zip
+   python3 tools/portctl.py audit-zip donor work/sources/X6812B-H6912KL-R-OP-231009V922.zip
+   python3 tools/portctl.py extract base work/sources/lineage-18.1-20221025-nightly-lavender-signed.zip --output-dir work/extracted
+   python3 tools/portctl.py extract donor work/sources/X6812B-H6912KL-R-OP-231009V922.zip --output-dir work/extracted
+   ```
+
+Extraction is atomic, validates ZIP paths and expected entry sizes, and never
+extracts donor boot/DTBO/preloader/modem images.
+
 See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline and
 [docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
 

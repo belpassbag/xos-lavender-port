@@ -29,6 +29,26 @@ required_zip_entries = [
   "boot.img",
   "vbmeta.img",
 ]
+extract_entries = [
+  "META-INF/com/android/metadata",
+  "META-INF/com/google/android/updater-script",
+  "system.new.dat.br",
+  "system.transfer.list",
+  "vendor.new.dat.br",
+  "vendor.transfer.list",
+  "boot.img",
+  "vbmeta.img",
+]
+
+[base.expected_entry_sizes]
+"META-INF/com/android/metadata" = 306
+"META-INF/com/google/android/updater-script" = 1599
+"system.new.dat.br" = 629925639
+"system.transfer.list" = 8269
+"vendor.new.dat.br" = 207113214
+"vendor.transfer.list" = 2897
+"boot.img" = 67108864
+"vbmeta.img" = 8192
 
 [donor]
 role = "framework-source"
@@ -48,6 +68,32 @@ required_zip_entries = [
   "vbmeta_vendor.img",
   "MT6768_Android_scatter.txt",
 ]
+extract_entries = [
+  "super.img",
+  "vbmeta.img",
+  "vbmeta_system.img",
+  "vbmeta_vendor.img",
+  "MT6768_Android_scatter.txt",
+  "MT6768_Android_scatter.xml",
+  "android-info.txt",
+  "installed-files-product.txt",
+  "installed-files-system_ext.txt",
+  "installed-files-vendor.txt",
+]
+
+[donor.expected_entry_sizes]
+"super.img" = 6808452712
+"boot.img" = 33554432
+"dtbo.img" = 8388608
+"vbmeta.img" = 4096
+"vbmeta_system.img" = 4096
+"vbmeta_vendor.img" = 4096
+"MT6768_Android_scatter.txt" = 22391
+"MT6768_Android_scatter.xml" = 37883
+"android-info.txt" = 21
+"installed-files-product.txt" = 26327
+"installed-files-system_ext.txt" = 25750
+"installed-files-vendor.txt" = 112428
 
 [policy]
 keep_from_base = [
@@ -100,4 +146,3 @@ first_boot_exclusions = [
   "/system_ext/app/AfterSaleCalibrationTool",
   "/system_ext/app/VideoCallEnhancer",
 ]
-
