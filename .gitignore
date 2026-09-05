@@ -1,0 +1,21 @@
+# Source ROMs and reconstructed payloads
+incoming/
+work/
+out/
+cache/
+*.img
+*.zip
+*.dat
+*.dat.br
+*.part-*
+
+# Generated reports
+reports/generated/
+
+# Python/editor noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/
+

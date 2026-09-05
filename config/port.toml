@@ -1,0 +1,103 @@
+schema_version = 1
+
+[project]
+name = "xos-lavender-port"
+mode = "xos-core-debloated"
+android_version = 11
+sdk = 30
+architecture = "arm64"
+
+[base]
+role = "target"
+device = "lavender"
+model = "Redmi Note 7"
+platform = "sdm660"
+filename = "lineage-18.1-20221025-nightly-lavender-signed.zip"
+parts_prefix = "lineage.zip.part-"
+size = 851061345
+sha256 = "4845c4910593a6b8a612c5ea9af1b6752fe8ab2514f62e062abe759e760b82ba"
+system_partition_size = 3640619008
+system_filesystem_data_size = 3583086592
+vendor_partition_size = 2080305152
+boot_partition_size = 67108864
+dtbo_partition_size = 8388608
+required_zip_entries = [
+  "system.new.dat.br",
+  "system.transfer.list",
+  "vendor.new.dat.br",
+  "vendor.transfer.list",
+  "boot.img",
+  "vbmeta.img",
+]
+
+[donor]
+role = "framework-source"
+device = "Infinix-X6812B"
+model = "Infinix HOT 11S NFC"
+platform = "mt6768"
+filename = "X6812B-H6912KL-R-OP-231009V922.zip"
+parts_prefix = "xos.zip.part-"
+size = 3939359066
+sha256 = "5066e7b7e397bad14b81d91f42a1d79e05c150e37c7b047f7b52e5b4b8a178b0"
+required_zip_entries = [
+  "super.img",
+  "boot.img",
+  "dtbo.img",
+  "vbmeta.img",
+  "vbmeta_system.img",
+  "vbmeta_vendor.img",
+  "MT6768_Android_scatter.txt",
+]
+
+[policy]
+keep_from_base = [
+  "boot",
+  "vendor",
+  "dtbo",
+  "vbmeta",
+  "kernel",
+  "fstab",
+  "init",
+  "modem",
+  "firmware",
+  "persist",
+]
+forbidden_donor_output_images = [
+  "boot.img",
+  "boot-adb.img",
+  "dtbo.img",
+  "vendor.img",
+  "vbmeta.img",
+  "vbmeta_system.img",
+  "vbmeta_vendor.img",
+  "preloader.img",
+  "preloader_emmc.img",
+  "preloader_raw.img",
+  "preloader_ufs.img",
+  "preloader_x6812_h6912.bin",
+  "kernel",
+  "lk.img",
+  "md1img.img",
+  "scp.img",
+  "spmfw.img",
+  "sspm.img",
+  "tee.img",
+]
+core_xos_packages = [
+  "TranSystemUI",
+  "TranSettings",
+  "XLauncher",
+  "OSSettingsExt",
+]
+first_boot_exclusions = [
+  "/product/operator",
+  "/product/app",
+  "/product/priv-app",
+  "/system_ext/app/TranssionCamera",
+  "/system_ext/app/FaceID",
+  "/system_ext/app/Nfc_st",
+  "/system_ext/app/CalibrationTool2",
+  "/system_ext/app/AfterSaleCalibrationTool",
+  "/system_ext/app/VideoCallEnhancer",
+]
+
