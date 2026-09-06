@@ -51,3 +51,6 @@ flashing payloads.
 Case 2 passes. Case 3 may consume only the verified allowlisted payloads and
 must continue to preserve the `lavender` boot, kernel, vendor, DTBO, vbmeta,
 modem, firmware, fstab, and init stack.
+
+After temporary-workspace cleanup, the complete Drive-to-source verification
+was repeated successfully. See [RECOVERY-2.md](RECOVERY-2.md).

@@ -18,7 +18,7 @@ The recovery evidence is recorded in [RECOVERY-1.md](RECOVERY-1.md).
 
 ## Case 2 — Source materialization
 
-Status: **accepted on 2026-09-06**.
+Status: **accepted; sources fully revalidated on 2026-09-06**.
 
 - Verify every uploaded part against its manifest.
 - Reconstruct both source ZIPs atomically.
@@ -26,6 +26,8 @@ Status: **accepted on 2026-09-06**.
 - Audit ZIP paths and required entries.
 
 Acceptance: both exact source archives are available locally and verified.
+
+The recovery evidence is recorded in [RECOVERY-2.md](RECOVERY-2.md).
 
 ## Case 3 — Partition extraction and compatibility audit
 
