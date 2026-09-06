@@ -31,6 +31,8 @@ The recovery evidence is recorded in [RECOVERY-2.md](RECOVERY-2.md).
 
 ## Case 3 — Partition extraction and compatibility audit
 
+Status: **in progress; durable recovery checkpoint recorded**.
+
 - Convert Lineage block OTA payloads to target system/vendor images.
 - Convert sparse donor `super.img` and extract logical partitions.
 - Measure filesystem use and partition headroom.
@@ -39,6 +41,9 @@ The recovery evidence is recorded in [RECOVERY-2.md](RECOVERY-2.md).
 
 Acceptance: a fact-backed keep/remove/patch matrix exists and the selected XOS
 core payload fits the stock `lavender` system partition.
+
+The current measured evidence and exact restart boundary are recorded in
+[RECOVERY-3-CHECKPOINT.md](RECOVERY-3-CHECKPOINT.md).
 
 ## Case 4 — XOS Core port pipeline
 
