@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import struct
 import sys
 import tempfile
@@ -32,6 +33,10 @@ TYPE_INT_BOOLEAN = 0x12
 APK_SIG_MAGIC = b"APK Sig Block 42"
 APK_SIG_V2 = 0x7109871A
 APK_SIG_V3 = 0xF05368C0
+DEX_HEADER_SIZE = 0x70
+DEX_ENDIAN_CONSTANT = 0x12345678
+DEX_ARCHIVE_MEMBER = re.compile(r"^classes(?:[2-9][0-9]*)?\.dex$")
+SAFE_INPUT_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 class CompatibilityError(RuntimeError):
@@ -571,6 +576,183 @@ def apk_report(path: Path) -> dict:
     }
 
 
+def _uleb128(data: bytes, offset: int) -> tuple[int, int]:
+    value = 0
+    for index in range(5):
+        _require(offset < len(data), "truncated DEX ULEB128")
+        byte = data[offset]
+        offset += 1
+        value |= (byte & 0x7F) << (index * 7)
+        if not byte & 0x80:
+            _require(index < 4 or byte <= 0x0F, "DEX ULEB128 exceeds 32 bits")
+            return value, offset
+    raise CompatibilityError("DEX ULEB128 exceeds five bytes")
+
+
+def _dex_table(data: bytes, size_offset: int, item_size: int, label: str) -> tuple[int, int]:
+    size, offset = struct.unpack_from("<II", data, size_offset)
+    _require(size == 0 or offset >= DEX_HEADER_SIZE, f"invalid DEX {label} offset")
+    _require(offset + size * item_size <= len(data), f"DEX {label} exceeds file")
+    return size, offset
+
+
+def _dex_string(data: bytes, offset: int) -> str:
+    _, cursor = _uleb128(data, offset)
+    end = data.find(b"\0", cursor)
+    _require(end >= 0, "unterminated DEX string")
+    try:
+        return data[cursor:end].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CompatibilityError("DEX descriptor string is not UTF-8") from exc
+
+
+def _object_descriptor(descriptor: str) -> str | None:
+    while descriptor.startswith("["):
+        descriptor = descriptor[1:]
+    if descriptor.startswith("L") and descriptor.endswith(";") and len(descriptor) > 2:
+        return descriptor
+    return None
+
+
+def dex_inventory(data: bytes) -> dict[str, set[str]]:
+    _require(len(data) >= DEX_HEADER_SIZE, "truncated DEX header")
+    _require(data[:4] == b"dex\n" and data[7] == 0, "invalid DEX magic")
+    _require(data[4:7].isdigit(), "invalid DEX version")
+    file_size, header_size, endian_tag = struct.unpack_from("<III", data, 0x20)
+    _require(file_size == len(data), "DEX file-size field mismatch")
+    _require(header_size == DEX_HEADER_SIZE, "unsupported DEX header size")
+    _require(endian_tag == DEX_ENDIAN_CONSTANT, "unsupported DEX endian tag")
+
+    string_count, string_offset = _dex_table(data, 0x38, 4, "string IDs")
+    type_count, type_offset = _dex_table(data, 0x40, 4, "type IDs")
+    class_count, class_offset = _dex_table(data, 0x60, 32, "class definitions")
+
+    strings = []
+    for index in range(string_count):
+        value_offset = struct.unpack_from("<I", data, string_offset + index * 4)[0]
+        _require(0 < value_offset < len(data), "DEX string-data offset exceeds file")
+        strings.append(_dex_string(data, value_offset))
+
+    descriptors = []
+    for index in range(type_count):
+        string_index = struct.unpack_from("<I", data, type_offset + index * 4)[0]
+        _require(string_index < len(strings), "DEX type descriptor index exceeds strings")
+        descriptors.append(strings[string_index])
+
+    defined: set[str] = set()
+    for index in range(class_count):
+        type_index = struct.unpack_from("<I", data, class_offset + index * 32)[0]
+        _require(type_index < len(descriptors), "DEX class index exceeds types")
+        descriptor = _object_descriptor(descriptors[type_index])
+        _require(descriptor is not None, "DEX class definition is not an object type")
+        _require(descriptor not in defined, f"duplicate DEX class definition: {descriptor}")
+        defined.add(descriptor)
+
+    referenced = {
+        normalized
+        for descriptor in descriptors
+        if (normalized := _object_descriptor(descriptor)) is not None
+    }
+    return {"defined": defined, "referenced": referenced}
+
+
+def archive_dex_inventory(path: Path) -> dict[str, set[str]]:
+    if path.is_symlink() or not path.is_file():
+        raise CompatibilityError(f"DEX archive is not a regular file: {path}")
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            _require(len(names) == len(set(names)), f"duplicate DEX archive member: {path}")
+            dex_names = sorted(name for name in names if DEX_ARCHIVE_MEMBER.fullmatch(name))
+            _require(dex_names, f"DEX archive contains no classes*.dex: {path}")
+            defined: set[str] = set()
+            referenced: set[str] = set()
+            for name in dex_names:
+                inventory = dex_inventory(archive.read(name))
+                duplicates = defined & inventory["defined"]
+                if duplicates:
+                    raise CompatibilityError(
+                        f"duplicate class across DEX members in {path}: {sorted(duplicates)[0]}"
+                    )
+                defined.update(inventory["defined"])
+                referenced.update(inventory["referenced"])
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise CompatibilityError(f"cannot inspect DEX archive {path}: {exc}") from exc
+    return {"defined": defined, "referenced": referenced}
+
+
+def _named_paths(values: list[str], label: str) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        identifier, separator, raw_path = value.partition("=")
+        _require(separator == "=" and SAFE_INPUT_ID.fullmatch(identifier) is not None, f"invalid {label}: {value}")
+        _require(identifier not in result, f"duplicate {label} identifier: {identifier}")
+        _require(bool(raw_path), f"missing {label} path: {identifier}")
+        result[identifier] = Path(raw_path)
+    _require(result, f"at least one {label} is required")
+    return result
+
+
+def dex_resolution_report(
+    packages: dict[str, Path],
+    providers: dict[str, Path],
+    custom_prefixes: list[str],
+) -> dict:
+    _require(custom_prefixes, "at least one custom DEX descriptor prefix is required")
+    _require(
+        all(prefix.startswith("L") and "/" in prefix and not prefix.endswith(";") for prefix in custom_prefixes),
+        "invalid custom DEX descriptor prefix",
+    )
+    _require(len(custom_prefixes) == len(set(custom_prefixes)), "duplicate custom DEX descriptor prefix")
+
+    provider_classes: dict[str, set[str]] = {}
+    class_providers: dict[str, list[str]] = {}
+    for identifier, path in sorted(providers.items()):
+        classes = archive_dex_inventory(path)["defined"]
+        provider_classes[identifier] = classes
+        for descriptor in classes:
+            class_providers.setdefault(descriptor, []).append(identifier)
+
+    package_reports = []
+    unresolved_total = 0
+    for identifier, path in sorted(packages.items()):
+        inventory = archive_dex_inventory(path)
+        external = inventory["referenced"] - inventory["defined"]
+        custom = sorted(
+            descriptor for descriptor in external
+            if any(descriptor.startswith(prefix) for prefix in custom_prefixes)
+        )
+        resolved = {
+            descriptor: class_providers[descriptor]
+            for descriptor in custom
+            if descriptor in class_providers
+        }
+        unresolved = [descriptor for descriptor in custom if descriptor not in class_providers]
+        unresolved_total += len(unresolved)
+        package_reports.append(
+            {
+                "id": identifier,
+                "path": str(path),
+                "defined_classes": len(inventory["defined"]),
+                "referenced_classes": len(inventory["referenced"]),
+                "custom_external_classes": custom,
+                "resolved_external_classes": resolved,
+                "unresolved_external_classes": unresolved,
+            }
+        )
+
+    return {
+        "status": "verified" if unresolved_total == 0 else "unresolved",
+        "custom_prefixes": sorted(custom_prefixes),
+        "providers": [
+            {"id": identifier, "path": str(providers[identifier]), "defined_classes": len(provider_classes[identifier])}
+            for identifier in sorted(providers)
+        ],
+        "packages": package_reports,
+        "unresolved_external_classes": unresolved_total,
+    }
+
+
 def _partition_file(roots: dict[str, Path], locked_path: str) -> Path:
     parts = PurePosixPath(locked_path).parts
     _require(len(parts) >= 3, f"partition path is too short: {locked_path}")
@@ -691,6 +873,22 @@ def command_verify_selection(profile: dict, _port: dict, summary: dict, args: ar
     print(json.dumps(report, indent=2, sort_keys=True))
 
 
+def command_verify_dex(_profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
+    packages = _named_paths(args.package, "package")
+    providers = _named_paths(args.provider, "provider")
+    report = {
+        "profile_sha256": summary["profile_sha256"],
+        **dex_resolution_report(packages, providers, args.custom_prefix),
+    }
+    if args.report:
+        _atomic_report(args.report, report)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    _require(
+        report["unresolved_external_classes"] == 0,
+        f"{report['unresolved_external_classes']} custom external DEX classes are unresolved",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
@@ -715,6 +913,13 @@ def build_parser() -> argparse.ArgumentParser:
     selection_parser.add_argument("--system-ext-root", type=Path, required=True)
     selection_parser.add_argument("--report", type=Path)
     selection_parser.set_defaults(handler=command_verify_selection)
+
+    dex_parser = subparsers.add_parser("verify-dex", help="verify custom DEX references against provider archives")
+    dex_parser.add_argument("--package", action="append", required=True, metavar="ID=PATH")
+    dex_parser.add_argument("--provider", action="append", required=True, metavar="ID=PATH")
+    dex_parser.add_argument("--custom-prefix", action="append", required=True, metavar="LDESCRIPTOR/PREFIX/")
+    dex_parser.add_argument("--report", type=Path)
+    dex_parser.set_defaults(handler=command_verify_dex)
     return parser
 
 

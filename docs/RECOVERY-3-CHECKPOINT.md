@@ -122,6 +122,13 @@ verified providers. `TranSystemUI` resolves through `framework.jar` and
 libraries in SystemUI and Launcher require only standard Android 32-bit and
 64-bit libraries already present in the base.
 
+The repository now includes `compatctl.py verify-dex`, which parses every
+`classes*.dex` member directly, inventories defined and referenced object
+descriptors, and maps each custom external reference to the exact supplied
+provider archive. The earlier result above remains evidence, but Case 3 is not
+accepted until a fresh run against the rematerialized payload produces the
+durable report.
+
 ## Durable checkpoints
 
 1. Image conversion and LP extraction tool plus unit tests: pushed on branch

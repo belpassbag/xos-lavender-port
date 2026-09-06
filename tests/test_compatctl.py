@@ -7,6 +7,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zipfile
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -142,6 +143,55 @@ def der(tag: int, content: bytes) -> bytes:
     return bytes([tag]) + encoded_length + content
 
 
+def uleb128(value: int) -> bytes:
+    result = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        result.append(byte | (0x80 if value else 0))
+        if not value:
+            return bytes(result)
+
+
+def dex_fixture(descriptors: list[str], defined: list[str]) -> bytes:
+    strings = list(dict.fromkeys(descriptors))
+    types = list(dict.fromkeys(descriptors))
+    string_ids_offset = compatctl.DEX_HEADER_SIZE
+    type_ids_offset = string_ids_offset + len(strings) * 4
+    class_defs_offset = type_ids_offset + len(types) * 4
+    data_offset = class_defs_offset + len(defined) * 32
+
+    string_data = bytearray()
+    string_offsets = []
+    for value in strings:
+        encoded = value.encode("utf-8")
+        string_offsets.append(data_offset + len(string_data))
+        string_data.extend(uleb128(len(value)))
+        string_data.extend(encoded)
+        string_data.append(0)
+
+    file_size = data_offset + len(string_data)
+    result = bytearray(file_size)
+    result[:8] = b"dex\n035\0"
+    struct.pack_into("<III", result, 0x20, file_size, compatctl.DEX_HEADER_SIZE, compatctl.DEX_ENDIAN_CONSTANT)
+    struct.pack_into("<II", result, 0x38, len(strings), string_ids_offset)
+    struct.pack_into("<II", result, 0x40, len(types), type_ids_offset)
+    struct.pack_into("<II", result, 0x60, len(defined), class_defs_offset)
+    for index, offset in enumerate(string_offsets):
+        struct.pack_into("<I", result, string_ids_offset + index * 4, offset)
+    for index, descriptor in enumerate(types):
+        struct.pack_into("<I", result, type_ids_offset + index * 4, strings.index(descriptor))
+    for index, descriptor in enumerate(defined):
+        struct.pack_into("<I", result, class_defs_offset + index * 32, types.index(descriptor))
+    result[data_offset:] = string_data
+    return bytes(result)
+
+
+def dex_archive(path: Path, descriptors: list[str], defined: list[str]) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("classes.dex", dex_fixture(descriptors, defined))
+
+
 class CompatibilityProfileTests(unittest.TestCase):
     def load(self) -> tuple[dict, dict]:
         return (
@@ -218,6 +268,69 @@ class ParserTests(unittest.TestCase):
         )
         pkcs7 = der(0x30, der(0x06, b"\x2a\x03") + der(0xA0, signed_data))
         self.assertEqual(compatctl._pkcs7_certificate(pkcs7), certificate)
+
+    def test_parses_dex_class_inventory(self) -> None:
+        data = dex_fixture(
+            ["Lapp/Main;", "Lvendor/runtime/Api;", "[Lvendor/runtime/Api;", "I"],
+            ["Lapp/Main;"],
+        )
+        inventory = compatctl.dex_inventory(data)
+        self.assertEqual(inventory["defined"], {"Lapp/Main;"})
+        self.assertEqual(
+            inventory["referenced"],
+            {"Lapp/Main;", "Lvendor/runtime/Api;"},
+        )
+
+    def test_resolves_custom_dex_classes_to_exact_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "ui.apk"
+            provider = root / "runtime.jar"
+            dex_archive(
+                package,
+                ["Lapp/Main;", "Lvendor/runtime/Api;", "Ljava/lang/Object;"],
+                ["Lapp/Main;"],
+            )
+            dex_archive(
+                provider,
+                ["Lvendor/runtime/Api;", "Ljava/lang/Object;"],
+                ["Lvendor/runtime/Api;"],
+            )
+            report = compatctl.dex_resolution_report(
+                {"ui": package},
+                {"runtime": provider},
+                ["Lvendor/"],
+            )
+        self.assertEqual(report["status"], "verified")
+        self.assertEqual(report["unresolved_external_classes"], 0)
+        self.assertEqual(
+            report["packages"][0]["resolved_external_classes"],
+            {"Lvendor/runtime/Api;": ["runtime"]},
+        )
+
+    def test_reports_unresolved_custom_dex_class(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            package = root / "ui.apk"
+            provider = root / "runtime.jar"
+            dex_archive(package, ["Lapp/Main;", "Lvendor/missing/Api;"], ["Lapp/Main;"])
+            dex_archive(provider, ["Lvendor/other/Api;"], ["Lvendor/other/Api;"])
+            report = compatctl.dex_resolution_report(
+                {"ui": package},
+                {"runtime": provider},
+                ["Lvendor/"],
+            )
+        self.assertEqual(report["status"], "unresolved")
+        self.assertEqual(
+            report["packages"][0]["unresolved_external_classes"],
+            ["Lvendor/missing/Api;"],
+        )
+
+    def test_rejects_malformed_dex_table(self) -> None:
+        data = bytearray(dex_fixture(["Lapp/Main;"], ["Lapp/Main;"]))
+        struct.pack_into("<I", data, 0x3C, len(data) + 4)
+        with self.assertRaises(compatctl.CompatibilityError):
+            compatctl.dex_inventory(bytes(data))
 
     def test_tree_upper_bound_and_symlink_guard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
