@@ -25,9 +25,199 @@ BUFFER_SIZE = 4 * 1024 * 1024
 HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 PART_SUFFIX = re.compile(r"^(?P<prefix>.+?)(?P<number>[0-9]+)$")
 
+LOCKED_PROJECT = {
+    "name": "xos-lavender-port",
+    "mode": "xos-core-debloated",
+    "android_version": 11,
+    "sdk": 30,
+    "architecture": "arm64",
+}
+
+LOCKED_BASE = {
+    "role": "target",
+    "device": "lavender",
+    "model": "Redmi Note 7",
+    "platform": "sdm660",
+    "filename": "lineage-18.1-20221025-nightly-lavender-signed.zip",
+    "parts_prefix": "lineage.zip.part-",
+    "size": 851061345,
+    "sha256": "4845c4910593a6b8a612c5ea9af1b6752fe8ab2514f62e062abe759e760b82ba",
+    "system_partition_size": 3640619008,
+    "system_filesystem_data_size": 3583086592,
+    "vendor_partition_size": 2080305152,
+    "boot_partition_size": 67108864,
+    "dtbo_partition_size": 8388608,
+    "required_zip_entries": [
+        "system.new.dat.br",
+        "system.transfer.list",
+        "vendor.new.dat.br",
+        "vendor.transfer.list",
+        "boot.img",
+        "vbmeta.img",
+    ],
+    "extract_entries": [
+        "META-INF/com/android/metadata",
+        "META-INF/com/google/android/updater-script",
+        "system.new.dat.br",
+        "system.transfer.list",
+        "vendor.new.dat.br",
+        "vendor.transfer.list",
+        "boot.img",
+        "vbmeta.img",
+    ],
+    "expected_entry_sizes": {
+        "META-INF/com/android/metadata": 306,
+        "META-INF/com/google/android/updater-script": 1599,
+        "system.new.dat.br": 629925639,
+        "system.transfer.list": 8269,
+        "vendor.new.dat.br": 207113214,
+        "vendor.transfer.list": 2897,
+        "boot.img": 67108864,
+        "vbmeta.img": 8192,
+    },
+}
+
+LOCKED_DONOR = {
+    "role": "framework-source",
+    "device": "Infinix-X6812B",
+    "model": "Infinix HOT 11S NFC",
+    "platform": "mt6768",
+    "filename": "X6812B-H6912KL-R-OP-231009V922.zip",
+    "parts_prefix": "xos.zip.part-",
+    "size": 3939359066,
+    "sha256": "5066e7b7e397bad14b81d91f42a1d79e05c150e37c7b047f7b52e5b4b8a178b0",
+    "required_zip_entries": [
+        "super.img",
+        "boot.img",
+        "dtbo.img",
+        "vbmeta.img",
+        "vbmeta_system.img",
+        "vbmeta_vendor.img",
+        "MT6768_Android_scatter.txt",
+    ],
+    "extract_entries": [
+        "super.img",
+        "vbmeta.img",
+        "vbmeta_system.img",
+        "vbmeta_vendor.img",
+        "MT6768_Android_scatter.txt",
+        "MT6768_Android_scatter.xml",
+        "android-info.txt",
+        "installed-files-product.txt",
+        "installed-files-system_ext.txt",
+        "installed-files-vendor.txt",
+    ],
+    "expected_entry_sizes": {
+        "super.img": 6808452712,
+        "boot.img": 33554432,
+        "dtbo.img": 8388608,
+        "vbmeta.img": 4096,
+        "vbmeta_system.img": 4096,
+        "vbmeta_vendor.img": 4096,
+        "MT6768_Android_scatter.txt": 22391,
+        "MT6768_Android_scatter.xml": 37883,
+        "android-info.txt": 21,
+        "installed-files-product.txt": 26327,
+        "installed-files-system_ext.txt": 25750,
+        "installed-files-vendor.txt": 112428,
+    },
+}
+
+LOCKED_POLICY = {
+    "keep_from_base": [
+        "boot",
+        "vendor",
+        "dtbo",
+        "vbmeta",
+        "kernel",
+        "fstab",
+        "init",
+        "modem",
+        "firmware",
+        "persist",
+    ],
+    "forbidden_donor_output_images": [
+        "boot.img",
+        "boot-adb.img",
+        "dtbo.img",
+        "vendor.img",
+        "vbmeta.img",
+        "vbmeta_system.img",
+        "vbmeta_vendor.img",
+        "preloader.img",
+        "preloader_emmc.img",
+        "preloader_raw.img",
+        "preloader_ufs.img",
+        "preloader_x6812_h6912.bin",
+        "kernel",
+        "lk.img",
+        "md1img.img",
+        "scp.img",
+        "spmfw.img",
+        "sspm.img",
+        "tee.img",
+    ],
+    "core_xos_packages": [
+        "TranSystemUI",
+        "TranSettings",
+        "XLauncher",
+        "OSSettingsExt",
+    ],
+    "core_xos_dependencies": [
+        "TranSettingsIntelligence",
+        "SystemUIOverlay",
+        "SettingsOverlay",
+        "XOSLauncher_res",
+        "com.transsion.mi.os.framework",
+    ],
+    "donor_product_selection": "allowlist-only",
+    "donor_product_package_allowlist": [
+        "/product/app/SystemUIOverlay",
+        "/product/app/SettingsOverlay",
+        "/product/priv-app/XOSLauncher_res",
+    ],
+    "donor_system_ext_selection": "allowlist-only",
+    "donor_system_ext_package_allowlist": [
+        "/system_ext/priv-app/TranSystemUI",
+        "/system_ext/priv-app/TranSettings",
+        "/system_ext/priv-app/TranSettingsIntelligence",
+        "/system_ext/app/XLauncher",
+        "/system_ext/app/OSSettingsExt",
+    ],
+    "first_boot_exclusions": [
+        "/product/operator",
+        "/system_ext/app/TranssionCamera",
+        "/system_ext/app/FaceID",
+        "/system_ext/app/Nfc_st",
+        "/system_ext/app/CalibrationTool2",
+        "/system_ext/app/AfterSaleCalibrationTool",
+        "/system_ext/app/VideoCallEnhancer",
+    ],
+}
+
 
 class PortError(RuntimeError):
     """Expected validation or source-intake failure."""
+
+
+def _require_locked_section(name: str, actual: object, expected: dict) -> None:
+    if actual == expected:
+        return
+    if not isinstance(actual, dict):
+        raise PortError(f"{name} section differs from the locked profile")
+    missing = sorted(expected.keys() - actual.keys())
+    unexpected = sorted(actual.keys() - expected.keys())
+    changed = sorted(
+        key for key in expected.keys() & actual.keys() if actual[key] != expected[key]
+    )
+    details: list[str] = []
+    if missing:
+        details.append("missing=" + ",".join(missing))
+    if unexpected:
+        details.append("unexpected=" + ",".join(unexpected))
+    if changed:
+        details.append("changed=" + ",".join(changed))
+    raise PortError(f"{name} section differs from the locked profile: {'; '.join(details)}")
 
 
 def load_config(path: Path = DEFAULT_CONFIG) -> dict:
@@ -45,6 +235,7 @@ def validate_config(config: dict) -> None:
         raise PortError("unsupported configuration schema")
 
     project = config.get("project", {})
+    _require_locked_section("project", project, LOCKED_PROJECT)
     if project.get("android_version") != 11 or project.get("sdk") != 30:
         raise PortError("profile must remain Android 11 / SDK 30")
     if project.get("architecture") != "arm64":
@@ -52,6 +243,8 @@ def validate_config(config: dict) -> None:
 
     base = config.get("base", {})
     donor = config.get("donor", {})
+    _require_locked_section("base", base, LOCKED_BASE)
+    _require_locked_section("donor", donor, LOCKED_DONOR)
     if base.get("device") != "lavender" or base.get("platform") != "sdm660":
         raise PortError("target must remain lavender / sdm660")
     if donor.get("device") != "Infinix-X6812B" or donor.get("platform") != "mt6768":
@@ -78,7 +271,9 @@ def validate_config(config: dict) -> None:
         if not set(required_entries).issubset(expected_sizes):
             raise PortError(f"{source_name} required entries lack expected sizes")
 
-    forbidden = set(config.get("policy", {}).get("forbidden_donor_output_images", []))
+    policy = config.get("policy", {})
+    _require_locked_section("policy", policy, LOCKED_POLICY)
+    forbidden = set(policy.get("forbidden_donor_output_images", []))
     required_forbidden = {"boot.img", "dtbo.img", "vendor.img", "vbmeta.img", "preloader.img"}
     if not required_forbidden.issubset(forbidden):
         missing = ", ".join(sorted(required_forbidden - forbidden))
@@ -86,6 +281,18 @@ def validate_config(config: dict) -> None:
 
     if base["system_filesystem_data_size"] > base["system_partition_size"]:
         raise PortError("base system filesystem exceeds its physical partition")
+
+    forbidden_donor_extraction = {"boot.img", "dtbo.img"}
+    unsafe_extraction = forbidden_donor_extraction & set(donor["extract_entries"])
+    if unsafe_extraction:
+        raise PortError(
+            "donor hardware images may not enter normal extraction: "
+            + ", ".join(sorted(unsafe_extraction))
+        )
+
+    broad_product_exclusions = {"/product/app", "/product/priv-app"}
+    if broad_product_exclusions & set(policy["first_boot_exclusions"]):
+        raise PortError("broad product exclusion conflicts with the XOS dependency allowlist")
 
 
 def sha256_file(path: Path) -> str:

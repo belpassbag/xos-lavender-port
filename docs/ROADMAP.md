@@ -5,12 +5,16 @@ start until the current case passes its acceptance checks.
 
 ## Case 1 — Repository and source intake
 
+Status: **accepted; safety profile recovered and re-verified on 2026-09-06**.
+
 - Record exact source names, sizes, and SHA-256 hashes.
 - Encode immutable hardware/partition safety policy.
 - Implement deterministic split-source reconstruction.
 - Add unit tests and local checks.
 
 Acceptance: configuration validation and all source-intake tests pass.
+
+The recovery evidence is recorded in [RECOVERY-1.md](RECOVERY-1.md).
 
 ## Case 2 — Source materialization
 

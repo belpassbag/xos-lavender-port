@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -35,6 +36,67 @@ class PortCtlTests(unittest.TestCase):
         config = portctl.load_config(REPOSITORY_ROOT / "config" / "port.toml")
         self.assertEqual(config["base"]["device"], "lavender")
         self.assertEqual(config["donor"]["platform"], "mt6768")
+
+    def test_rejects_every_locked_profile_mutation(self) -> None:
+        config = portctl.load_config(REPOSITORY_ROOT / "config" / "port.toml")
+        mutations = {
+            "source checksum": lambda value: value["base"].__setitem__("sha256", "0" * 64),
+            "partition size": lambda value: value["base"].__setitem__(
+                "system_partition_size", 99_999_999_999
+            ),
+            "base hardware policy": lambda value: value["policy"].__setitem__(
+                "keep_from_base", []
+            ),
+            "donor modem policy": lambda value: value["policy"].__setitem__(
+                "forbidden_donor_output_images",
+                [
+                    name
+                    for name in value["policy"]["forbidden_donor_output_images"]
+                    if name != "md1img.img"
+                ],
+            ),
+            "core package scope": lambda value: value["policy"].__setitem__(
+                "core_xos_packages", []
+            ),
+            "first boot exclusions": lambda value: value["policy"].__setitem__(
+                "first_boot_exclusions", []
+            ),
+            "donor boot extraction": lambda value: value["donor"]["extract_entries"].append(
+                "boot.img"
+            ),
+            "product allowlist": lambda value: value["policy"].__setitem__(
+                "donor_product_package_allowlist", []
+            ),
+        }
+        for label, mutation in mutations.items():
+            with self.subTest(label=label):
+                candidate = deepcopy(config)
+                mutation(candidate)
+                with self.assertRaises(portctl.PortError):
+                    portctl.validate_config(candidate)
+
+    def test_separates_analysis_inputs_from_final_output_policy(self) -> None:
+        config = portctl.load_config(REPOSITORY_ROOT / "config" / "port.toml")
+        donor_extract = set(config["donor"]["extract_entries"])
+        forbidden_output = set(config["policy"]["forbidden_donor_output_images"])
+        self.assertNotIn("boot.img", donor_extract)
+        self.assertNotIn("dtbo.img", donor_extract)
+        self.assertIn("vbmeta.img", donor_extract)
+        self.assertIn("vbmeta.img", forbidden_output)
+
+    def test_product_package_selection_keeps_only_verified_xos_dependencies(self) -> None:
+        policy = portctl.load_config(REPOSITORY_ROOT / "config" / "port.toml")["policy"]
+        self.assertEqual(policy["donor_product_selection"], "allowlist-only")
+        self.assertEqual(
+            set(policy["donor_product_package_allowlist"]),
+            {
+                "/product/app/SystemUIOverlay",
+                "/product/app/SettingsOverlay",
+                "/product/priv-app/XOSLauncher_res",
+            },
+        )
+        self.assertNotIn("/product/app", policy["first_boot_exclusions"])
+        self.assertNotIn("/product/priv-app", policy["first_boot_exclusions"])
 
     def test_discovers_numeric_parts_in_order(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

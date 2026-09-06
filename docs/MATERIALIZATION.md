@@ -42,6 +42,10 @@ required entries, and exact expected entry sizes. The extraction allowlist does
 not include donor `boot.img`, `dtbo.img`, preloader, modem, vendor, or firmware
 images.
 
+The three donor vbmeta files are analysis inputs used to inspect AVB metadata.
+They are explicitly forbidden from every final output and are not target
+flashing payloads.
+
 ## Acceptance
 
 Case 2 passes. Case 3 may consume only the verified allowlisted payloads and
