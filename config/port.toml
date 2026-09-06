@@ -135,10 +135,29 @@ core_xos_packages = [
   "XLauncher",
   "OSSettingsExt",
 ]
+core_xos_dependencies = [
+  "TranSettingsIntelligence",
+  "SystemUIOverlay",
+  "SettingsOverlay",
+  "XOSLauncher_res",
+  "com.transsion.mi.os.framework",
+]
+donor_product_selection = "allowlist-only"
+donor_product_package_allowlist = [
+  "/product/app/SystemUIOverlay",
+  "/product/app/SettingsOverlay",
+  "/product/priv-app/XOSLauncher_res",
+]
+donor_system_ext_selection = "allowlist-only"
+donor_system_ext_package_allowlist = [
+  "/system_ext/priv-app/TranSystemUI",
+  "/system_ext/priv-app/TranSettings",
+  "/system_ext/priv-app/TranSettingsIntelligence",
+  "/system_ext/app/XLauncher",
+  "/system_ext/app/OSSettingsExt",
+]
 first_boot_exclusions = [
   "/product/operator",
-  "/product/app",
-  "/product/priv-app",
   "/system_ext/app/TranssionCamera",
   "/system_ext/app/FaceID",
   "/system_ext/app/Nfc_st",

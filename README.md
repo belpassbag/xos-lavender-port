@@ -58,13 +58,17 @@ project scope.
 Extraction is atomic, validates ZIP paths and expected entry sizes, and never
 extracts donor boot/DTBO/preloader/modem images.
 
+Donor vbmeta files are read-only analysis inputs. The locked output policy
+forbids packaging or flashing them on `lavender`.
+
 See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
 [docs/MATERIALIZATION.md](docs/MATERIALIZATION.md) for the accepted source
-materialization evidence, and [docs/ROADMAP.md](docs/ROADMAP.md) for the
+materialization evidence, [docs/RECOVERY-1.md](docs/RECOVERY-1.md) for the
+safety hardening evidence, and [docs/ROADMAP.md](docs/ROADMAP.md) for the
 case-by-case execution plan.
 
 ## Status
 
-Cases 1 and 2 are accepted: source intake, uploaded-part verification,
-byte-exact reconstruction, and ZIP audit all pass. No ROM has been built or
-flashed.
+Cases 1 and 2 are accepted: the immutable safety profile, source intake,
+uploaded-part verification, byte-exact reconstruction, and ZIP audit all pass.
+Case 3 has not been accepted. No ROM has been built or flashed.
