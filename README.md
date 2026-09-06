@@ -58,9 +58,13 @@ project scope.
 Extraction is atomic, validates ZIP paths and expected entry sizes, and never
 extracts donor boot/DTBO/preloader/modem images.
 
-See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline and
-[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
+See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
+[docs/MATERIALIZATION.md](docs/MATERIALIZATION.md) for the accepted source
+materialization evidence, and [docs/ROADMAP.md](docs/ROADMAP.md) for the
+case-by-case execution plan.
 
 ## Status
 
-Case 1 is repository/source-intake foundation. No ROM has been built or flashed.
+Cases 1 and 2 are accepted: source intake, uploaded-part verification,
+byte-exact reconstruction, and ZIP audit all pass. No ROM has been built or
+flashed.
