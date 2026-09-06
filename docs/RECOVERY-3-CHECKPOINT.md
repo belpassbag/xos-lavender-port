@@ -126,7 +126,8 @@ libraries in SystemUI and Launcher require only standard Android 32-bit and
 
 1. Image conversion and LP extraction tool plus unit tests: pushed on branch
    `case/3-compatibility-audit`.
-2. Locked compatibility profile and static validator: pending.
+2. Locked compatibility profile, static validator, and unit tests: included in
+   this branch checkpoint.
 3. Fresh payload verification report and final Case 3 documentation: pending.
 4. Pull-request CI, merge, and post-merge CI: pending.
 

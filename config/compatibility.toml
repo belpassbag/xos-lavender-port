@@ -1,0 +1,315 @@
+schema_version = 1
+
+[project]
+device = "lavender"
+donor = "Infinix-X6812B"
+android_version = 11
+sdk = 30
+architecture = "arm64"
+port_profile_canonical_sha256 = "0f784e780af49ebf9d7dd53233bd034c3abc0e9833df2f29fa58fcc3b0ce648a"
+
+[[images]]
+id = "base_system"
+role = "target"
+size = 3640619008
+sha256 = "3536fa28745278ecbd38cc0a0f09329a1c19cf1f959aeb189ee71c1c9f904501"
+block_count = 874777
+free_blocks = 477417
+block_size = 4096
+
+[[images]]
+id = "base_vendor"
+role = "target"
+size = 2080305152
+sha256 = "967a4b560b774e869a5ce16f6b5ee6b73dedfdfde7fa4ef641b3b9cdce4f8f60"
+block_count = 499853
+free_blocks = 369676
+block_size = 4096
+
+[[images]]
+id = "donor_system"
+role = "framework-source"
+size = 1121648640
+sha256 = "2fb5bf44091b6ddd9d63799351c38f75c26499809f6db832e24ced3f5700313d"
+block_count = 269498
+free_blocks = 816
+block_size = 4096
+
+[[images]]
+id = "donor_product"
+role = "allowlist-source"
+size = 3206438912
+sha256 = "a3e760d683423b419f2b859fbf3ac24cfd41276939291e819cbeb05e9db6fcbb"
+block_count = 770449
+free_blocks = 2305
+block_size = 4096
+
+[[images]]
+id = "donor_system_ext"
+role = "allowlist-source"
+size = 1706311680
+sha256 = "7de9ac35bd7c51e683b86546278e2c630024e9f8c9a01c9d4b99f1836324b002"
+block_count = 409986
+free_blocks = 1240
+block_size = 4096
+
+[super]
+sparse_size = 6808452712
+expanded_size = 7345774592
+sha256 = "7b622c6fa90c909f2bdde39d0344dcadfb576662a33b447a9d6b0808d362a383"
+logical_block_size = 4096
+metadata_slots = 3
+vendor_a_size = 853602304
+selected_b_partitions_are_empty = true
+
+[capacity]
+target_filesystem_data_size = 3583086592
+base_system_used = 1627586560
+donor_system_used = 1100521472
+selected_product_upper = 13475840
+selected_system_ext_upper = 282091520
+conservative_total = 3023675392
+headroom = 559411200
+minimum_reserve = 268435456
+
+[vintf]
+preserve = "base"
+target_manifest_level = 3
+matrix_level_3_sha256 = "67edd789de4bd35d47e14c2365de082b9ee64ade0c1ca77e2842f3a2015af8b5"
+base_and_donor_matrix_match = true
+
+[selinux]
+preserve_base_cil_and_mappings = true
+allow_new_policy_types = false
+plat_precompiled_sha256 = "23f3b45bb1932c664d94cf157f2a9cda8d6415321383b97cd59da17321e80e9c"
+product_precompiled_sha256 = "5e7d483f16bc3b339e9dc63ce0a0f4a35263ee48e340bafe47fb10464368f653"
+system_ext_precompiled_sha256 = "d2a9ddfc73981f04a363623b1ade22849abf9288cf94118c6ebb13c8d5ba4f7f"
+
+[kernel]
+required_builtins = [
+  "CONFIG_BLK_DEV_LOOP=y",
+  "CONFIG_DM_VERITY=y",
+  "CONFIG_DM_VERITY_FEC=y",
+  "CONFIG_EXT4_FS=y",
+  "CONFIG_SECURITY_SELINUX=y",
+]
+packaged_apex_payload_filesystem = "ext4"
+
+[signers]
+base_platform_sha256 = "59988fff31e2f85fbaddc5b37704be97d1c5b7db72a4fb2ed5f07b58ccf20ccf"
+xos_platform_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+mixed_shared_uid_signers_forbidden = true
+
+[layout]
+preserve_base_system_as_root = true
+base_product_target = "/system/product"
+base_system_ext_target = "/system/system_ext"
+preserve_base_init = true
+preserve_base_fstab = true
+
+[selection]
+product_mode = "allowlist-only"
+system_ext_mode = "allowlist-only"
+discard_preopt = true
+selected_apk_bytes = 286326703
+selected_package_directory_bytes = 287141584
+product_paths = [
+  "/product/app/SystemUIOverlay",
+  "/product/app/SettingsOverlay",
+  "/product/priv-app/XOSLauncher_res",
+]
+system_ext_paths = [
+  "/system_ext/priv-app/TranSystemUI",
+  "/system_ext/priv-app/TranSettings",
+  "/system_ext/priv-app/TranSettingsIntelligence",
+  "/system_ext/app/XLauncher",
+  "/system_ext/app/OSSettingsExt",
+]
+
+[exclusions]
+retain_base_phone_shared_uid_group = true
+retain_base_qti_system_ext = true
+retain_base_bluetooth = true
+exclude_donor_phone_shared_uid_group = true
+exclude_donor_mtk_bluetooth = true
+exclude_donor_hardware_services = true
+exclude_donor_generated_rros = true
+paths = [
+  "/product/operator",
+  "/system_ext/app/TranssionCamera",
+  "/system_ext/app/FaceID",
+  "/system_ext/app/Nfc_st",
+  "/system_ext/app/CalibrationTool2",
+  "/system_ext/app/AfterSaleCalibrationTool",
+  "/system_ext/app/VideoCallEnhancer",
+]
+
+[service_types]
+kolun = "activity_service"
+gamemode_helper = "activity_service"
+sand_accessor = "activity_service"
+os_audio_change = "audio_service"
+tran_appm = "system_config_service"
+tran_resmonitor = "system_config_service"
+tran_tranlog = "system_config_service"
+tranlog_sub = "system_config_service"
+tran_pwhub = "power_service"
+
+[classpaths]
+strategy = "donor-xos-runtime-plus-base-qti"
+required_donor_jars = [
+  "framework.jar",
+  "services.jar",
+  "ext.jar",
+  "mediatek-common.jar",
+  "mediatek-ims-common.jar",
+  "mediatek-telephony-base.jar",
+  "mediatek-telephony-common.jar",
+  "os-framework.jar",
+  "os-services.jar",
+  "kolun.jar",
+  "kolunlibrary.jar",
+]
+required_base_jars = ["org.ifaa.jar", "telephony-ext.jar"]
+
+[[runtime_dependencies]]
+id = "os_framework_apex"
+path = "/system_ext/apex/com.transsion.mi.os.framework.apex"
+size = 989949
+identity_state = "pending-fresh-verification"
+
+[[runtime_dependencies]]
+id = "kolun_apex"
+path = "/system_ext/apex/com.transsion.kolun.apex"
+size = 620913
+identity_state = "pending-fresh-verification"
+
+[[runtime_dependencies]]
+id = "transsion_resources"
+path = "/system_ext/framework/transsion-res.apk"
+size = 214684
+identity_state = "pending-fresh-verification"
+
+[[embedded_providers]]
+id = "os-framework.jar"
+container = "os_framework_apex"
+size = 326966
+identity_state = "pending-fresh-verification"
+
+[[embedded_providers]]
+id = "os-services.jar"
+container = "os_framework_apex"
+size = 517122
+identity_state = "pending-fresh-verification"
+
+[[embedded_providers]]
+id = "kolun.jar"
+container = "kolun_apex"
+size = 216998
+identity_state = "pending-fresh-verification"
+
+[[embedded_providers]]
+id = "kolunlibrary.jar"
+container = "kolun_apex"
+size = 850
+identity_state = "pending-fresh-verification"
+
+[[packages]]
+id = "TranSystemUI"
+path = "/system_ext/priv-app/TranSystemUI/TranSystemUI.apk"
+package = "com.android.systemui"
+shared_uid = "android.uid.systemui"
+signer = "xos-platform"
+size = 87861843
+abis = ["arm64-v8a", "armeabi-v7a"]
+uses_libraries = []
+custom_external_classes = 3
+resolved_external_classes = 3
+
+[[packages]]
+id = "TranSettings"
+path = "/system_ext/priv-app/TranSettings/TranSettings.apk"
+package = "com.android.settings"
+shared_uid = "android.uid.system"
+signer = "xos-platform"
+size = 131176072
+abis = []
+uses_libraries = ["org.apache.http.legacy"]
+custom_external_classes = 22
+resolved_external_classes = 22
+
+[[packages]]
+id = "TranSettingsIntelligence"
+path = "/system_ext/priv-app/TranSettingsIntelligence/TranSettingsIntelligence.apk"
+package = "com.android.settings.intelligence"
+shared_uid = ""
+signer = "standalone"
+size = 4394905
+abis = []
+uses_libraries = []
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "XLauncher"
+path = "/system_ext/app/XLauncher/XLauncher.apk"
+package = "com.transsion.XOSLauncher"
+shared_uid = ""
+signer = "standalone"
+size = 37277083
+abis = ["arm64-v8a", "armeabi", "armeabi-v7a"]
+uses_libraries = ["org.apache.http.legacy"]
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "OSSettingsExt"
+path = "/system_ext/app/OSSettingsExt/OSSettingsExt.apk"
+package = "com.transsion.ossettingsext"
+shared_uid = "android.uid.system"
+signer = "xos-platform"
+size = 18851477
+abis = []
+uses_libraries = []
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "SystemUIOverlay"
+path = "/product/app/SystemUIOverlay/SystemUIOverlay.apk"
+package = "com.android.systemui.os.overlay"
+shared_uid = ""
+signer = "standalone"
+size = 12728
+abis = []
+uses_libraries = []
+overlay_target = "com.android.systemui"
+overlay_priority = 2
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "SettingsOverlay"
+path = "/product/app/SettingsOverlay/SettingsOverlay.apk"
+package = "com.android.settings.os.overlay"
+shared_uid = ""
+signer = "standalone"
+size = 16941
+abis = []
+uses_libraries = []
+overlay_target = "com.android.settings"
+overlay_priority = 2
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "XOSLauncher_res"
+path = "/product/priv-app/XOSLauncher_res/XOSLauncher_res.apk"
+package = "com.infinix"
+shared_uid = ""
+signer = "standalone"
+size = 6735654
+abis = []
+uses_libraries = []
+custom_external_classes = 0
+resolved_external_classes = 0
