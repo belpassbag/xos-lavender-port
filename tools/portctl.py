@@ -5,13 +5,18 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import shutil
+import stat
 import sys
 import tempfile
 import tomllib
 from typing import BinaryIO, Iterable
+import zipfile
+import zlib
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +64,19 @@ def validate_config(config: dict) -> None:
             raise PortError(f"invalid {source_name} size")
         if not source.get("filename") or not source.get("parts_prefix"):
             raise PortError(f"incomplete {source_name} file profile")
+        required_entries = source.get("required_zip_entries")
+        extract_entries = source.get("extract_entries")
+        expected_sizes = source.get("expected_entry_sizes")
+        if not isinstance(required_entries, list) or not required_entries:
+            raise PortError(f"missing {source_name} required ZIP entries")
+        if not isinstance(extract_entries, list) or not extract_entries:
+            raise PortError(f"missing {source_name} extraction allowlist")
+        if not isinstance(expected_sizes, dict) or not expected_sizes:
+            raise PortError(f"missing {source_name} expected entry sizes")
+        if not set(extract_entries).issubset(expected_sizes):
+            raise PortError(f"{source_name} extraction allowlist lacks expected sizes")
+        if not set(required_entries).issubset(expected_sizes):
+            raise PortError(f"{source_name} required entries lack expected sizes")
 
     forbidden = set(config.get("policy", {}).get("forbidden_donor_output_images", []))
     required_forbidden = {"boot.img", "dtbo.img", "vendor.img", "vbmeta.img", "preloader.img"}
@@ -92,6 +110,187 @@ def verify_source(path: Path, source: dict) -> None:
         raise PortError(
             f"SHA-256 mismatch for {path.name}: expected {source['sha256']}, got {actual_sha256}"
         )
+
+
+def is_safe_zip_name(name: str) -> bool:
+    if not name or "\x00" in name or "\\" in name:
+        return False
+    path = PurePosixPath(name)
+    return not path.is_absolute() and ".." not in path.parts
+
+
+def audit_zip(path: Path, source: dict) -> dict:
+    verify_source(path, source)
+    try:
+        archive = zipfile.ZipFile(path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise PortError(f"cannot open ZIP {path}: {exc}") from exc
+
+    with archive:
+        entries: dict[str, zipfile.ZipInfo] = {}
+        for info in archive.infolist():
+            if not is_safe_zip_name(info.filename):
+                raise PortError(f"unsafe ZIP entry: {info.filename!r}")
+            if info.filename in entries:
+                raise PortError(f"duplicate ZIP entry: {info.filename}")
+            if info.flag_bits & 0x1:
+                raise PortError(f"encrypted ZIP entry is unsupported: {info.filename}")
+            mode = info.external_attr >> 16
+            if mode and stat.S_ISLNK(mode):
+                raise PortError(f"symbolic-link ZIP entry is unsupported: {info.filename}")
+            entries[info.filename] = info
+
+        missing = sorted(set(source["required_zip_entries"]) - entries.keys())
+        if missing:
+            raise PortError(f"required ZIP entries missing: {', '.join(missing)}")
+
+        for name, expected_size in source["expected_entry_sizes"].items():
+            info = entries.get(name)
+            if info is None:
+                raise PortError(f"expected ZIP entry missing: {name}")
+            if info.file_size != expected_size:
+                raise PortError(
+                    f"ZIP entry size mismatch for {name}: expected {expected_size}, got {info.file_size}"
+                )
+
+        return {
+            "filename": path.name,
+            "size": path.stat().st_size,
+            "sha256": source["sha256"],
+            "entry_count": len(entries),
+            "uncompressed_size": sum(info.file_size for info in entries.values()),
+            "extract_entries": [
+                {
+                    "path": name,
+                    "size": entries[name].file_size,
+                    "crc32": f"{entries[name].CRC:08x}",
+                    "compression": entries[name].compress_type,
+                }
+                for name in source["extract_entries"]
+            ],
+        }
+
+
+def crc32_file(path: Path) -> int:
+    checksum = 0
+    try:
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(BUFFER_SIZE), b""):
+                checksum = zlib.crc32(chunk, checksum)
+    except OSError as exc:
+        raise PortError(f"cannot calculate CRC32 for {path}: {exc}") from exc
+    return checksum & 0xFFFFFFFF
+
+
+def verify_extracted_file(path: Path, info: zipfile.ZipInfo) -> None:
+    if not path.is_file():
+        raise PortError(f"extracted file not found: {path}")
+    if path.stat().st_size != info.file_size:
+        raise PortError(f"extracted size mismatch: {path}")
+    if crc32_file(path) != info.CRC:
+        raise PortError(f"extracted CRC32 mismatch: {path}")
+
+
+def atomic_extract_entry(archive: zipfile.ZipFile, info: zipfile.ZipInfo, destination: Path) -> None:
+    if destination.is_symlink():
+        raise PortError(f"refusing symbolic-link extraction destination: {destination}")
+    if destination.exists():
+        verify_extracted_file(destination, info)
+        return
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".partial", dir=destination.parent
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "wb") as output, archive.open(info, "r") as source:
+            copy_stream(source, output)
+            output.flush()
+            os.fsync(output.fileno())
+        verify_extracted_file(temporary_path, info)
+        os.replace(temporary_path, destination)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def write_manifest_once(path: Path, manifest: dict) -> None:
+    content = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    if path.is_symlink():
+        raise PortError(f"refusing symbolic-link manifest destination: {path}")
+    if path.exists():
+        try:
+            existing = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PortError(f"cannot read existing manifest {path}: {exc}") from exc
+        if existing != content:
+            raise PortError(f"existing extraction manifest differs: {path}")
+        return
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".partial", dir=path.parent
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def safe_extraction_destination(root: Path, relative_path: PurePosixPath) -> Path:
+    current = root
+    for component in relative_path.parts[:-1]:
+        current = current / component
+        if current.is_symlink():
+            raise PortError(f"refusing symbolic-link extraction directory: {current}")
+        if current.exists() and not current.is_dir():
+            raise PortError(f"extraction path component is not a directory: {current}")
+        current.mkdir(exist_ok=True)
+    destination = current / relative_path.name
+    if destination.is_symlink():
+        raise PortError(f"refusing symbolic-link extraction destination: {destination}")
+    return destination
+
+
+def extract_source(path: Path, output_dir: Path, source_name: str, source: dict) -> Path:
+    report = audit_zip(path, source)
+    destination_root = output_dir / source_name
+    if destination_root.is_symlink():
+        raise PortError(f"refusing symbolic-link extraction root: {destination_root}")
+    destination_root.mkdir(parents=True, exist_ok=True)
+
+    required_space = sum(entry["size"] for entry in report["extract_entries"]) + 256 * 1024 * 1024
+    available_space = shutil.disk_usage(destination_root).free
+    if available_space < required_space:
+        raise PortError(
+            f"insufficient extraction space: need {required_space} bytes, have {available_space}"
+        )
+
+    try:
+        archive = zipfile.ZipFile(path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise PortError(f"cannot reopen ZIP {path}: {exc}") from exc
+
+    with archive:
+        for name in source["extract_entries"]:
+            relative_path = PurePosixPath(name)
+            destination = safe_extraction_destination(destination_root, relative_path)
+            atomic_extract_entry(archive, archive.getinfo(name), destination)
+
+    manifest = {
+        "source": source_name,
+        "source_filename": report["filename"],
+        "source_size": report["size"],
+        "source_sha256": report["sha256"],
+        "entries": report["extract_entries"],
+    }
+    write_manifest_once(destination_root / "extraction-manifest.json", manifest)
+    return destination_root
 
 
 def discover_parts(parts_dir: Path, prefix: str) -> list[Path]:
@@ -235,6 +434,18 @@ def command_assemble(config: dict, args: argparse.Namespace) -> None:
     print(f"Assembled and verified {args.source}: {output}")
 
 
+def command_audit_zip(config: dict, args: argparse.Namespace) -> None:
+    source = source_profile(config, args.source)
+    report = audit_zip(args.path, source)
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+def command_extract(config: dict, args: argparse.Namespace) -> None:
+    source = source_profile(config, args.source)
+    output = extract_source(args.path, args.output_dir, args.source, source)
+    print(f"Extracted and verified {args.source}: {output}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -258,6 +469,17 @@ def build_parser() -> argparse.ArgumentParser:
     assemble_parser.add_argument("--parts-dir", type=Path, required=True)
     assemble_parser.add_argument("--output-dir", type=Path, required=True)
     assemble_parser.set_defaults(handler=command_assemble)
+
+    audit_parser = subparsers.add_parser("audit-zip", help="verify ZIP structure and approved entries")
+    audit_parser.add_argument("source", choices=("base", "donor"))
+    audit_parser.add_argument("path", type=Path)
+    audit_parser.set_defaults(handler=command_audit_zip)
+
+    extract_parser = subparsers.add_parser("extract", help="extract only the source allowlist atomically")
+    extract_parser.add_argument("source", choices=("base", "donor"))
+    extract_parser.add_argument("path", type=Path)
+    extract_parser.add_argument("--output-dir", type=Path, required=True)
+    extract_parser.set_defaults(handler=command_extract)
 
     return parser
 

@@ -46,9 +46,25 @@ project scope.
    python3 tools/portctl.py assemble donor --parts-dir incoming --output-dir work/sources
    ```
 
-See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline and
-[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
+4. Audit the reconstructed archives and extract only the case-approved payloads:
+
+   ```bash
+   python3 tools/portctl.py audit-zip base work/sources/lineage-18.1-20221025-nightly-lavender-signed.zip
+   python3 tools/portctl.py audit-zip donor work/sources/X6812B-H6912KL-R-OP-231009V922.zip
+   python3 tools/portctl.py extract base work/sources/lineage-18.1-20221025-nightly-lavender-signed.zip --output-dir work/extracted
+   python3 tools/portctl.py extract donor work/sources/X6812B-H6912KL-R-OP-231009V922.zip --output-dir work/extracted
+   ```
+
+Extraction is atomic, validates ZIP paths and expected entry sizes, and never
+extracts donor boot/DTBO/preloader/modem images.
+
+See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
+[docs/MATERIALIZATION.md](docs/MATERIALIZATION.md) for the accepted source
+materialization evidence, and [docs/ROADMAP.md](docs/ROADMAP.md) for the
+case-by-case execution plan.
 
 ## Status
 
-Case 1 is repository/source-intake foundation. No ROM has been built or flashed.
+Cases 1 and 2 are accepted: source intake, uploaded-part verification,
+byte-exact reconstruction, and ZIP audit all pass. No ROM has been built or
+flashed.

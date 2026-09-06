@@ -14,6 +14,8 @@ Acceptance: configuration validation and all source-intake tests pass.
 
 ## Case 2 — Source materialization
 
+Status: **accepted on 2026-09-06**.
+
 - Verify every uploaded part against its manifest.
 - Reconstruct both source ZIPs atomically.
 - Verify reconstructed size and SHA-256 against the locked profile.
@@ -67,4 +69,3 @@ device. Flashing remains manual.
 - Document known limitations and recovery procedure.
 - Tag the verified source/tooling state and publish checksums for any release
   artifact.
-
