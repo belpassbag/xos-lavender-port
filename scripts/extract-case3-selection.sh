@@ -130,6 +130,7 @@ for directory in etc/vintf etc/selinux etc/init; do
 done
 
 dump_file "$base_vendor" /etc/fstab.qcom "$output_dir/base/vendor/etc/fstab.qcom"
+dump_file "$base_vendor" /build.prop "$output_dir/base/vendor/build.prop"
 dump_file "$base_system" /system/build.prop "$output_dir/base/system/build.prop"
 dump_file "$donor_system" /system/build.prop "$output_dir/donor/system/build.prop"
 dump_file "$donor_product" /build.prop "$output_dir/donor/product/build.prop"

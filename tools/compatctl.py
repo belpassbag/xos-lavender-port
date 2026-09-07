@@ -14,11 +14,12 @@ import sys
 import tempfile
 import tomllib
 import zipfile
+import zlib
 
 
 DEFAULT_PROFILE = Path(__file__).resolve().parents[1] / "config" / "compatibility.toml"
 DEFAULT_PORT_PROFILE = Path(__file__).resolve().parents[1] / "config" / "port.toml"
-LOCKED_PROFILE_SHA256 = "209161ed6a5fe7a1f72fa1884c452963a62b78f62b67631ec6af94996c889b59"
+LOCKED_PROFILE_SHA256 = "03c5553149b49aba127534a96a8420d2a2682590e79c3b40b9fedd43509847bd"
 BUFFER_SIZE = 4 * 1024 * 1024
 SHA256_LENGTH = 64
 
@@ -123,13 +124,7 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
     )
 
     images = _unique_table(profile.get("images"), "id", "image")
-    expected_image_ids = {
-        "base_system",
-        "base_vendor",
-        "donor_system",
-        "donor_product",
-        "donor_system_ext",
-    }
+    expected_image_ids = {"base_system", "base_vendor", "donor_system", "donor_product", "donor_system_ext"}
     _require(set(images) == expected_image_ids, "image identity set mismatch")
     for identifier, image in images.items():
         for field in ("size", "block_count", "free_blocks", "block_size"):
@@ -137,7 +132,6 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
         _require(image["free_blocks"] < image["block_count"], f"invalid {identifier} free blocks")
         _require(image["block_size"] == 4096, f"unexpected {identifier} block size")
         _require(_is_sha256(image.get("sha256")), f"invalid {identifier} SHA-256")
-
     _require(images["base_system"]["size"] == base.get("system_partition_size"), "base system size mismatch")
     _require(images["base_vendor"]["size"] == base.get("vendor_partition_size"), "base vendor size mismatch")
 
@@ -149,16 +143,35 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
     _require(capacity.get("base_system_used") == used["base_system"], "base used-byte mismatch")
     _require(capacity.get("donor_system_used") == used["donor_system"], "donor used-byte mismatch")
     _require(capacity.get("target_filesystem_data_size") == base.get("system_filesystem_data_size"), "target data size mismatch")
+    for partition in ("product", "system_ext"):
+        measured = capacity.get(f"selected_{partition}_measured")
+        upper = capacity.get(f"selected_{partition}_upper")
+        _require(isinstance(measured, int) and measured > 0, f"invalid selected {partition} measurement")
+        _require(isinstance(upper, int) and upper >= measured, f"selected {partition} exceeds upper bound")
+    runtime_upper = capacity.get("selected_system_ext_runtime_upper")
+    _require(isinstance(runtime_upper, int) and runtime_upper > 0, "invalid system_ext runtime upper bound")
     conservative = (
         capacity.get("base_system_used", -1)
         + capacity.get("donor_system_used", -1)
         + capacity.get("selected_product_upper", -1)
         + capacity.get("selected_system_ext_upper", -1)
+        + runtime_upper
     )
     _require(capacity.get("conservative_total") == conservative, "capacity total mismatch")
     headroom = capacity["target_filesystem_data_size"] - conservative
     _require(capacity.get("headroom") == headroom, "capacity headroom mismatch")
     _require(headroom >= capacity.get("minimum_reserve", headroom + 1), "capacity reserve is not met")
+
+    android = profile.get("android_compatibility", {})
+    expected_abis = ["arm64-v8a", "armeabi-v7a", "armeabi"]
+    _require(android.get("base_release") == android.get("donor_release") == 11, "Android release mismatch")
+    _require(android.get("base_sdk") == android.get("donor_sdk") == 30, "Android SDK mismatch")
+    _require(android.get("base_vendor_sdk") == 30, "base vendor SDK mismatch")
+    _require(android.get("base_vendor_first_api_level") == 28, "base vendor first API mismatch")
+    _require(android.get("base_abis") == expected_abis, "base ABI list mismatch")
+    _require(android.get("donor_abis") == expected_abis, "donor ABI list mismatch")
+    for key in ("base_system_build_prop_sha256", "donor_system_build_prop_sha256", "base_vendor_build_prop_sha256"):
+        _require(_is_sha256(android.get(key)), f"invalid Android evidence hash: {key}")
 
     super_profile = profile.get("super", {})
     _require(super_profile.get("expanded_size") > super_profile.get("sparse_size", 0), "invalid super sizes")
@@ -184,11 +197,49 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
     _require(_is_sha256(signers.get("xos_platform_sha256")), "invalid XOS signer hash")
     _require(signers.get("mixed_shared_uid_signers_forbidden") is True, "shared-UID signer guard missing")
 
+    shared_uid_audit = profile.get("shared_uid_audit", {})
+    expected_shared_uid_counts = {
+        "base_apks_scanned": 107,
+        "base_shared_uid_packages": 44,
+        "donor_apks_scanned": 237,
+        "donor_shared_uid_packages": 83,
+        "parse_failures": 0,
+    }
+    for key, expected in expected_shared_uid_counts.items():
+        _require(shared_uid_audit.get(key) == expected, f"shared-UID audit drift: {key}")
+    _require(
+        shared_uid_audit.get("selected_shared_uids") == ["android.uid.system", "android.uid.systemui"],
+        "selected shared-UID set drift",
+    )
+    _require(
+        shared_uid_audit.get("retained_conflicting_shared_uids") == ["android.uid.system"],
+        "retained shared-UID conflict drift",
+    )
+    _require(
+        shared_uid_audit.get("case4_strategy") == "unified-port-platform-signing",
+        "shared-UID strategy drift",
+    )
+    for key in (
+        "resign_included_platform_apks",
+        "preserve_standalone_apk_signers",
+        "preserve_apex_signers",
+        "update_mac_permissions_signer",
+        "verify_single_certificate_per_shared_uid",
+        "remove_shared_uid_forbidden",
+        "global_signature_bypass_forbidden",
+        "key_selection_requires_approval",
+    ):
+        _require(shared_uid_audit.get(key) is True, f"shared-UID guard missing: {key}")
+
     layout = profile.get("layout", {})
     for key in ("preserve_base_system_as_root", "preserve_base_init", "preserve_base_fstab"):
         _require(layout.get(key) is True, f"layout guard missing: {key}")
     _require(layout.get("base_product_target") == "/system/product", "base product target mismatch")
     _require(layout.get("base_system_ext_target") == "/system/system_ext", "base system_ext target mismatch")
+    for key in ("base_init_path", "base_fstab_path"):
+        _locked_absolute_path(layout.get(key), key.replace("_", " "))
+    for key in ("base_init_sha256", "base_fstab_sha256"):
+        _require(_is_sha256(layout.get(key)), f"invalid layout evidence hash: {key}")
 
     selection = profile.get("selection", {})
     _require(selection.get("product_mode") == "allowlist-only", "product selection is not allowlist-only")
@@ -204,41 +255,63 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
 
     exclusion = profile.get("exclusions", {})
     for key in (
-        "retain_base_phone_shared_uid_group",
-        "retain_base_qti_system_ext",
-        "retain_base_bluetooth",
-        "exclude_donor_phone_shared_uid_group",
-        "exclude_donor_mtk_bluetooth",
-        "exclude_donor_hardware_services",
-        "exclude_donor_generated_rros",
+        "retain_base_phone_shared_uid_group", "retain_base_qti_system_ext", "retain_base_bluetooth",
+        "exclude_donor_phone_shared_uid_group", "exclude_donor_mtk_bluetooth",
+        "exclude_donor_hardware_services", "exclude_donor_generated_rros",
     ):
         _require(exclusion.get(key) is True, f"exclusion guard missing: {key}")
     exclusion_paths = [_locked_absolute_path(path, "exclusion path") for path in exclusion.get("paths", [])]
     _require(exclusion_paths == policy.get("first_boot_exclusions"), "first-boot exclusion drift")
 
     expected_services = {
-        "kolun": "activity_service",
-        "gamemode_helper": "activity_service",
-        "sand_accessor": "activity_service",
-        "os_audio_change": "audio_service",
-        "tran_appm": "system_config_service",
-        "tran_resmonitor": "system_config_service",
-        "tran_tranlog": "system_config_service",
-        "tranlog_sub": "system_config_service",
-        "tran_pwhub": "power_service",
+        "kolun": "activity_service", "gamemode_helper": "activity_service", "sand_accessor": "activity_service",
+        "os_audio_change": "audio_service", "tran_appm": "system_config_service",
+        "tran_resmonitor": "system_config_service", "tran_tranlog": "system_config_service",
+        "tranlog_sub": "system_config_service", "tran_pwhub": "power_service",
     }
     _require(profile.get("service_types") == expected_services, "service-type map drift")
 
     required_kernel = {
-        "CONFIG_BLK_DEV_LOOP=y",
-        "CONFIG_DM_VERITY=y",
-        "CONFIG_DM_VERITY_FEC=y",
-        "CONFIG_EXT4_FS=y",
-        "CONFIG_SECURITY_SELINUX=y",
+        "CONFIG_BLK_DEV_LOOP=y", "CONFIG_DM_VERITY=y", "CONFIG_DM_VERITY_FEC=y",
+        "CONFIG_EXT4_FS=y", "CONFIG_SECURITY_SELINUX=y",
     }
     kernel = profile.get("kernel", {})
     _require(set(kernel.get("required_builtins", [])) == required_kernel, "kernel requirement drift")
     _require(kernel.get("packaged_apex_payload_filesystem") == "ext4", "APEX filesystem mismatch")
+    for key in ("base_boot_sha256", "compressed_kernel_sha256", "ikconfig_sha256"):
+        _require(_is_sha256(kernel.get(key)), f"invalid kernel hash: {key}")
+    _require(isinstance(kernel.get("compressed_kernel_size"), int) and kernel["compressed_kernel_size"] > 0, "invalid kernel size")
+
+    apex_payloads = _unique_table(profile.get("apex_payloads"), "id", "APEX payload")
+    _require(set(apex_payloads) == {"os_framework_apex", "kolun_apex"}, "APEX payload set drift")
+    for identifier, payload in apex_payloads.items():
+        for field in ("size", "block_count", "free_blocks", "block_size"):
+            _require(isinstance(payload.get(field), int) and payload[field] > 0, f"invalid {identifier} {field}")
+        _require(payload["free_blocks"] < payload["block_count"], f"invalid {identifier} free blocks")
+        _require(payload["block_size"] == 4096, f"unexpected {identifier} block size")
+        _require(_is_sha256(payload.get("sha256")), f"invalid {identifier} SHA-256")
+
+    classpaths = profile.get("classpaths", {})
+    _require(classpaths.get("strategy") == "donor-xos-runtime-plus-base-qti", "classpath strategy drift")
+    _require(
+        classpaths.get("custom_prefixes") == ["Lcom/mediatek/", "Lcom/transsion/", "Ltranssion/"],
+        "custom DEX prefix drift",
+    )
+    required_donor = classpaths.get("required_donor_jars", [])
+    required_base = classpaths.get("required_base_jars", [])
+    _require(len(required_donor) == len(set(required_donor)), "duplicate donor classpath JAR")
+    _require(len(required_base) == len(set(required_base)), "duplicate base classpath JAR")
+    classpath_providers = _unique_table(profile.get("classpath_providers"), "id", "classpath provider")
+    external_donor = {identifier for identifier, row in classpath_providers.items() if row.get("source") == "donor-system"}
+    external_base = {identifier for identifier, row in classpath_providers.items() if row.get("source") == "base-system"}
+    _require(external_donor == set(required_donor[:7]), "donor classpath provider set drift")
+    _require(external_base == set(required_base), "base classpath provider set drift")
+    for identifier, provider in classpath_providers.items():
+        path = _locked_absolute_path(provider.get("path"), f"{identifier} provider path")
+        _require(path.startswith("/system/framework/"), f"unsafe classpath provider path: {identifier}")
+        _require(isinstance(provider.get("size"), int) and provider["size"] > 0, f"invalid provider size: {identifier}")
+        _require(isinstance(provider.get("defined_classes"), int) and provider["defined_classes"] > 0, f"invalid provider class count: {identifier}")
+        _require(_is_sha256(provider.get("sha256")), f"invalid provider SHA-256: {identifier}")
 
     packages = _unique_table(profile.get("packages"), "id", "package")
     expected_packages = set(policy.get("core_xos_packages", [])) | {
@@ -252,7 +325,14 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
         _require(path.startswith(("/product/", "/system_ext/")), f"unsafe package partition: {path}")
         _require(isinstance(package.get("package"), str) and package["package"], f"missing package name: {identifier}")
         _require(isinstance(package.get("size"), int) and package["size"] > 0, f"invalid package size: {identifier}")
+        _require(_is_sha256(package.get("sha256")), f"invalid package SHA-256: {identifier}")
+        _require(_is_sha256(package.get("certificate_sha256")), f"invalid package certificate: {identifier}")
         _require(package.get("signer") in {"xos-platform", "standalone"}, f"invalid signer class: {identifier}")
+        if package["signer"] == "xos-platform":
+            _require(package["certificate_sha256"] == signers["xos_platform_sha256"], f"XOS signer drift: {identifier}")
+        else:
+            _require(package["certificate_sha256"] != signers["xos_platform_sha256"], f"standalone signer drift: {identifier}")
+        _require(isinstance(package.get("dex_scan"), bool), f"missing DEX scan policy: {identifier}")
         _require(package.get("custom_external_classes") == package.get("resolved_external_classes"), f"unresolved classes: {identifier}")
         shared_uid = package.get("shared_uid", "")
         _require(isinstance(shared_uid, str), f"invalid shared UID: {identifier}")
@@ -269,23 +349,63 @@ def validate_profile(profile: dict, port_profile: dict, enforce_lock: bool = Tru
         _require(state in {"pending-fresh-verification", "verified"}, f"invalid runtime state: {identifier}")
         if state == "verified":
             _require(_is_sha256(runtime.get("sha256")), f"missing verified runtime hash: {identifier}")
+            _require(isinstance(runtime.get("package"), str) and runtime["package"], f"missing runtime package: {identifier}")
+            _require(_is_sha256(runtime.get("certificate_sha256")), f"missing runtime certificate: {identifier}")
 
     providers = _unique_table(profile.get("embedded_providers"), "id", "embedded provider")
-    _require(set(providers) == {"os-framework.jar", "os-services.jar", "kolun.jar", "kolunlibrary.jar"}, "embedded provider set drift")
+    expected_embedded = {"os-framework.jar", "os-services.jar", "kolun.jar", "kolunlibrary.jar", "proxy.jar", "proxy_sprd.jar"}
+    _require(set(providers) == expected_embedded, "embedded provider set drift")
     for identifier, provider in providers.items():
         _require(provider.get("container") in runtimes, f"unknown provider container: {identifier}")
+        path = _locked_absolute_path(provider.get("path"), f"{identifier} embedded path")
+        _require(path.startswith("/javalib/"), f"unsafe embedded provider path: {identifier}")
         _require(isinstance(provider.get("size"), int) and provider["size"] > 0, f"invalid provider size: {identifier}")
+        _require(isinstance(provider.get("defined_classes"), int) and provider["defined_classes"] > 0, f"invalid provider class count: {identifier}")
+        _require(isinstance(provider.get("classpath_required"), bool), f"invalid classpath requirement: {identifier}")
         state = provider.get("identity_state")
         _require(state in {"pending-fresh-verification", "verified"}, f"invalid provider state: {identifier}")
         if state == "verified":
             _require(_is_sha256(provider.get("sha256")), f"missing verified provider hash: {identifier}")
+    embedded_required = {identifier for identifier, row in providers.items() if row["classpath_required"]}
+    _require(embedded_required == set(required_donor[7:]), "embedded classpath provider set drift")
 
+    native_libraries = _unique_table(profile.get("native_libraries"), "id", "native library")
+    _require(len(native_libraries) == 5, "native library set drift")
+    for identifier, library in native_libraries.items():
+        _require(library.get("package") in packages, f"unknown native package: {identifier}")
+        member = library.get("member")
+        _require(isinstance(member, str) and re.fullmatch(r"lib/[^/]+/[^/]+\.so", member), f"invalid native member: {identifier}")
+        _require(library.get("elf_class") in {32, 64}, f"invalid ELF class: {identifier}")
+        _require(library.get("machine") in {"ARM", "AArch64"}, f"invalid ELF machine: {identifier}")
+        _require(isinstance(library.get("size"), int) and library["size"] > 0, f"invalid native size: {identifier}")
+        _require(_is_sha256(library.get("sha256")), f"invalid native SHA-256: {identifier}")
+        needed = library.get("needed")
+        _require(isinstance(needed, list) and needed == sorted(set(needed)) and needed, f"invalid DT_NEEDED set: {identifier}")
+
+    native = profile.get("native_compatibility", {})
+    _require(native.get("base_abis") == expected_abis, "native base ABI drift")
+    provided = native.get("base_system_provides")
+    _require(isinstance(provided, list) and provided == sorted(set(provided)), "invalid native provider set")
+    _require(native.get("all_needed_present_in_base_32_and_64") is True, "native base coverage is not locked")
+    _require(
+        {name for row in native_libraries.values() for name in row["needed"]} <= set(provided),
+        "native dependency missing from base provider set",
+    )
+
+    pending_runtimes = sum(row.get("identity_state") != "verified" for row in runtimes.values())
+    pending_providers = sum(row.get("identity_state") != "verified" for row in providers.values())
     return {
         "profile_sha256": digest,
         "images": len(images),
         "packages": len(packages),
         "runtime_dependencies": len(runtimes),
         "embedded_providers": len(providers),
+        "classpath_providers": len(classpath_providers),
+        "native_libraries": len(native_libraries),
+        "pending_identities": pending_runtimes + pending_providers,
+        "base_apks_scanned": shared_uid_audit["base_apks_scanned"],
+        "donor_apks_scanned": shared_uid_audit["donor_apks_scanned"],
+        "shared_uid_conflicts": len(shared_uid_audit["retained_conflicting_shared_uids"]),
         "headroom": headroom,
         "minimum_reserve": capacity["minimum_reserve"],
     }
@@ -408,7 +528,8 @@ def parse_android_manifest(data: bytes) -> dict:
             _require(strings is None, "duplicate Android XML string pool")
             strings = _string_pool(chunk)
         elif chunk_type == RES_XML_START_ELEMENT_TYPE:
-            _require(strings is not None and chunk_header >= 36, "start element precedes string pool")
+            _require(strings is not None, "start element precedes string pool")
+            _require(chunk_header >= 16 and len(chunk) >= 36, "truncated Android XML start element")
             name_index = struct.unpack_from("<I", chunk, 20)[0]
             attribute_start, attribute_size, attribute_count = struct.unpack_from("<HHH", chunk, 24)
             _require(attribute_size >= 20, "invalid Android XML attribute size")
@@ -447,6 +568,13 @@ def parse_android_manifest(data: bytes) -> dict:
         for name, attrs in elements
         if name == "uses-library" and "name" in attrs
     )
+    uses_permissions = sorted(
+        {
+            str(attrs["name"])
+            for name, attrs in elements
+            if name in {"uses-permission", "uses-permission-sdk-23"} and "name" in attrs
+        }
+    )
     overlays = [attrs for name, attrs in elements if name == "overlay"]
     _require(len(overlays) <= 1, "multiple overlay elements are unsupported")
     overlay = overlays[0] if overlays else {}
@@ -454,6 +582,7 @@ def parse_android_manifest(data: bytes) -> dict:
         "package": root.get("package", ""),
         "shared_uid": root.get("sharedUserId", ""),
         "uses_libraries": uses_libraries,
+        "uses_permissions": uses_permissions,
         "overlay_target": overlay.get("targetPackage"),
         "overlay_priority": overlay.get("priority"),
         "overlay_is_static": overlay.get("isStatic"),
@@ -576,6 +705,117 @@ def apk_report(path: Path) -> dict:
     }
 
 
+def _nul_terminated_string(data: bytes, offset: int, label: str) -> str:
+    _require(0 <= offset < len(data), f"{label} offset exceeds string table")
+    end = data.find(b"\0", offset)
+    _require(end >= 0, f"unterminated {label}")
+    try:
+        return data[offset:end].decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise CompatibilityError(f"non-ASCII {label}") from exc
+
+
+def elf_report(data: bytes) -> dict:
+    _require(len(data) >= 52 and data[:4] == b"\x7fELF", "invalid ELF header")
+    elf_class = data[4]
+    _require(elf_class in {1, 2}, "unsupported ELF class")
+    _require(data[5] == 1, "unsupported ELF byte order")
+    _require(data[6] == 1, "unsupported ELF version")
+    machine_value = struct.unpack_from("<H", data, 18)[0]
+    machines = {40: "ARM", 183: "AArch64"}
+    _require(machine_value in machines, "unsupported ELF machine")
+
+    if elf_class == 1:
+        section_offset = struct.unpack_from("<I", data, 32)[0]
+        header_size = struct.unpack_from("<H", data, 40)[0]
+        section_entry_size = struct.unpack_from("<H", data, 46)[0]
+        section_count = struct.unpack_from("<H", data, 48)[0]
+        section_format = "<IIIIIIIIII"
+        minimum_section_size = 40
+        dynamic_format = "<iI"
+        minimum_dynamic_size = 8
+        reported_class = 32
+    else:
+        _require(len(data) >= 64, "truncated ELF64 header")
+        section_offset = struct.unpack_from("<Q", data, 40)[0]
+        header_size = struct.unpack_from("<H", data, 52)[0]
+        section_entry_size = struct.unpack_from("<H", data, 58)[0]
+        section_count = struct.unpack_from("<H", data, 60)[0]
+        section_format = "<IIQQQQIIQQ"
+        minimum_section_size = 64
+        dynamic_format = "<qQ"
+        minimum_dynamic_size = 16
+        reported_class = 64
+
+    _require(header_size >= (52 if elf_class == 1 else 64), "invalid ELF header size")
+    _require(section_count > 0, "ELF extended section counts are unsupported")
+    _require(section_entry_size >= minimum_section_size, "invalid ELF section-header size")
+    _require(section_offset + section_count * section_entry_size <= len(data), "ELF section table exceeds file")
+    sections = []
+    for index in range(section_count):
+        fields = struct.unpack_from(section_format, data, section_offset + index * section_entry_size)
+        section = {
+            "type": fields[1],
+            "offset": fields[4],
+            "size": fields[5],
+            "link": fields[6],
+            "entry_size": fields[9],
+        }
+        if section["type"] != 8:  # SHT_NOBITS occupies memory but has no file payload.
+            _require(section["offset"] + section["size"] <= len(data), "ELF section exceeds file")
+        sections.append(section)
+
+    dynamic_sections = [section for section in sections if section["type"] == 6]
+    _require(len(dynamic_sections) == 1, "ELF dynamic section count is not one")
+    dynamic = dynamic_sections[0]
+    _require(dynamic["link"] < len(sections), "ELF dynamic string-table link exceeds sections")
+    strings_section = sections[dynamic["link"]]
+    _require(strings_section["type"] == 3, "ELF dynamic section does not link to a string table")
+    strings = data[strings_section["offset"] : strings_section["offset"] + strings_section["size"]]
+    entry_size = dynamic["entry_size"] or minimum_dynamic_size
+    _require(entry_size >= minimum_dynamic_size and dynamic["size"] % entry_size == 0, "invalid ELF dynamic entry size")
+    needed = []
+    saw_null = False
+    for offset in range(dynamic["offset"], dynamic["offset"] + dynamic["size"], entry_size):
+        tag, value = struct.unpack_from(dynamic_format, data, offset)
+        if tag == 0:
+            saw_null = True
+            break
+        if tag == 1:
+            needed.append(_nul_terminated_string(strings, value, "ELF DT_NEEDED name"))
+    _require(saw_null, "ELF dynamic section has no terminator")
+    _require(needed, "ELF contains no DT_NEEDED entries")
+    _require(len(needed) == len(set(needed)), "duplicate ELF DT_NEEDED entry")
+    return {"elf_class": reported_class, "machine": machines[machine_value], "needed": sorted(needed)}
+
+
+def apk_native_report(path: Path) -> list[dict]:
+    if path.is_symlink() or not path.is_file():
+        raise CompatibilityError(f"APK is not a regular file: {path}")
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            _require(len(names) == len(set(names)), f"duplicate APK member: {path}")
+            native_names = sorted(
+                name for name in names
+                if re.fullmatch(r"lib/[^/]+/[^/]+\.so", name) is not None
+            )
+            result = []
+            for name in native_names:
+                payload = archive.read(name)
+                result.append(
+                    {
+                        "member": name,
+                        "size": len(payload),
+                        "sha256": hashlib.sha256(payload).hexdigest(),
+                        **elf_report(payload),
+                    }
+                )
+            return result
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise CompatibilityError(f"cannot inspect native APK payload {path}: {exc}") from exc
+
+
 def _uleb128(data: bytes, offset: int) -> tuple[int, int]:
     value = 0
     for index in range(5):
@@ -596,14 +836,52 @@ def _dex_table(data: bytes, size_offset: int, item_size: int, label: str) -> tup
     return size, offset
 
 
+def _decode_dex_mutf8(data: bytes) -> tuple[str, int]:
+    units: list[int] = []
+    cursor = 0
+    while cursor < len(data):
+        first = data[cursor]
+        cursor += 1
+        if 0 < first < 0x80:
+            units.append(first)
+            continue
+        if 0xC0 <= first <= 0xDF:
+            _require(cursor < len(data), "truncated DEX MUTF-8 sequence")
+            second = data[cursor]
+            cursor += 1
+            _require(second & 0xC0 == 0x80, "invalid DEX MUTF-8 continuation")
+            unit = ((first & 0x1F) << 6) | (second & 0x3F)
+            _require(unit >= 0x80 or (first == 0xC0 and second == 0x80), "overlong DEX MUTF-8 sequence")
+            units.append(unit)
+            continue
+        if 0xE0 <= first <= 0xEF:
+            _require(cursor + 1 < len(data), "truncated DEX MUTF-8 sequence")
+            second, third = data[cursor], data[cursor + 1]
+            cursor += 2
+            _require(
+                second & 0xC0 == 0x80 and third & 0xC0 == 0x80,
+                "invalid DEX MUTF-8 continuation",
+            )
+            unit = ((first & 0x0F) << 12) | ((second & 0x3F) << 6) | (third & 0x3F)
+            _require(unit >= 0x800, "overlong DEX MUTF-8 sequence")
+            units.append(unit)
+            continue
+        raise CompatibilityError("invalid DEX MUTF-8 leading byte")
+
+    encoded_units = b"".join(struct.pack("<H", unit) for unit in units)
+    return encoded_units.decode("utf-16-le", errors="surrogatepass"), len(units)
+
+
 def _dex_string(data: bytes, offset: int) -> str:
-    _, cursor = _uleb128(data, offset)
+    utf16_size, cursor = _uleb128(data, offset)
     end = data.find(b"\0", cursor)
     _require(end >= 0, "unterminated DEX string")
     try:
-        return data[cursor:end].decode("utf-8")
+        value, decoded_units = _decode_dex_mutf8(data[cursor:end])
     except UnicodeDecodeError as exc:
-        raise CompatibilityError("DEX descriptor string is not UTF-8") from exc
+        raise CompatibilityError("invalid DEX MUTF-8 surrogate sequence") from exc
+    _require(decoded_units == utf16_size, "DEX string UTF-16 size mismatch")
+    return value
 
 
 def _object_descriptor(descriptor: str) -> str | None:
@@ -753,6 +1031,90 @@ def dex_resolution_report(
     }
 
 
+def boot_kernel_report(path: Path) -> dict:
+    if path.is_symlink() or not path.is_file():
+        raise CompatibilityError(f"boot image is not a regular file: {path}")
+    try:
+        boot = path.read_bytes()
+    except OSError as exc:
+        raise CompatibilityError(f"cannot read boot image {path}: {exc}") from exc
+    _require(len(boot) >= 44 and boot[:8] == b"ANDROID!", "invalid Android boot image")
+    kernel_size = struct.unpack_from("<I", boot, 8)[0]
+    page_size = struct.unpack_from("<I", boot, 36)[0]
+    _require(page_size in {2048, 4096, 8192, 16384, 32768, 65536}, "invalid boot page size")
+    _require(kernel_size > 0 and page_size + kernel_size <= len(boot), "boot kernel exceeds image")
+    kernel = boot[page_size : page_size + kernel_size]
+    _require(kernel.startswith(b"\x1f\x8b"), "boot kernel is not gzip-compressed")
+    try:
+        decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        expanded = decompressor.decompress(kernel) + decompressor.flush()
+    except zlib.error as exc:
+        raise CompatibilityError(f"cannot decompress boot kernel: {exc}") from exc
+    _require(decompressor.eof, "truncated gzip kernel")
+    start = expanded.find(b"IKCFG_ST")
+    end = expanded.find(b"IKCFG_ED", start + 8)
+    _require(start >= 0 and end > start and expanded.find(b"IKCFG_ST", start + 1) < 0, "kernel IKCONFIG markers invalid")
+    packed_config = expanded[start + 8 : end]
+    try:
+        config_bytes = zlib.decompress(packed_config, 16 + zlib.MAX_WBITS)
+        config_text = config_bytes.decode("utf-8")
+    except (zlib.error, UnicodeDecodeError) as exc:
+        raise CompatibilityError(f"cannot decode kernel IKCONFIG: {exc}") from exc
+    return {
+        "path": str(path),
+        "boot_sha256": hashlib.sha256(boot).hexdigest(),
+        "kernel_size": kernel_size,
+        "kernel_sha256": hashlib.sha256(kernel).hexdigest(),
+        "expanded_kernel_size": len(expanded),
+        "appended_dtb_size": len(decompressor.unused_data),
+        "ikconfig_sha256": hashlib.sha256(config_bytes).hexdigest(),
+        "config_lines": set(config_text.splitlines()),
+    }
+
+
+def _property_file(path: Path) -> dict[str, str]:
+    if path.is_symlink() or not path.is_file():
+        raise CompatibilityError(f"property file is not regular: {path}")
+    result: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CompatibilityError(f"cannot read property file {path}: {exc}") from exc
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        _require(separator == "=" and key, f"invalid property in {path}: {key}")
+        if key in result:
+            _require(result[key] == value, f"conflicting duplicate property in {path}: {key}")
+        result[key] = value
+    return result
+
+
+def _service_contexts(paths: list[Path]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for path in paths:
+        if not path.exists():
+            continue
+        _require(path.is_file() and not path.is_symlink(), f"invalid service-context file: {path}")
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise CompatibilityError(f"cannot read service contexts {path}: {exc}") from exc
+        for raw in lines:
+            line = raw.partition("#")[0].strip()
+            if not line:
+                continue
+            fields = line.split()
+            _require(len(fields) == 2, f"invalid service-context row in {path}")
+            service, context = fields
+            if service in result:
+                _require(result[service] == context, f"conflicting service context: {service}")
+            result[service] = context
+    return result
+
+
 def _partition_file(roots: dict[str, Path], locked_path: str) -> Path:
     parts = PurePosixPath(locked_path).parts
     _require(len(parts) >= 3, f"partition path is too short: {locked_path}")
@@ -770,12 +1132,16 @@ def _partition_file(roots: dict[str, Path], locked_path: str) -> Path:
 
 def tree_block_upper(path: Path, block_size: int = 4096) -> int:
     _require(path.is_dir() and not path.is_symlink(), f"package directory missing: {path}")
-    total = 0
+    total = block_size
     for item in path.rglob("*"):
         _require(not item.is_symlink(), f"symbolic link is forbidden in selected tree: {item}")
-        if item.is_file():
+        if item.is_dir():
+            total += block_size
+        elif item.is_file():
             size = item.stat().st_size
             total += ((size + block_size - 1) // block_size) * block_size
+        else:
+            raise CompatibilityError(f"unsupported selected-tree entry: {item}")
     return total
 
 
@@ -798,7 +1164,8 @@ def _atomic_report(path: Path, report: dict) -> None:
 
 
 def command_check(profile: dict, _port: dict, summary: dict, _args: argparse.Namespace) -> None:
-    print(json.dumps({"status": "verified", **summary}, indent=2, sort_keys=True))
+    status = "verified" if summary["pending_identities"] == 0 else "profile-valid-pending-identities"
+    print(json.dumps({"status": status, **summary}, indent=2, sort_keys=True))
 
 
 def command_verify_images(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
@@ -819,31 +1186,43 @@ def command_verify_images(profile: dict, _port: dict, summary: dict, args: argpa
 
 def command_verify_selection(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
     roots = {"system": args.system_root, "product": args.product_root, "system_ext": args.system_ext_root}
-    signers = profile["signers"]
+    expected_packages = _unique_table(profile["packages"], "id", "package")
+    expected_native = _unique_table(profile["native_libraries"], "id", "native library")
     package_reports = []
-    for expected in profile["packages"]:
+    native_reports = []
+    for expected in expected_packages.values():
         path = _partition_file(roots, expected["path"])
         actual = apk_report(path)
-        for field in ("size", "package", "shared_uid", "uses_libraries"):
+        for field in ("size", "sha256", "certificate_sha256", "package", "shared_uid", "uses_libraries"):
             _require(actual[field] == expected[field], f"{expected['id']} {field} mismatch")
         _require(actual["abis"] == sorted(expected["abis"]), f"{expected['id']} ABI mismatch")
         if "overlay_target" in expected:
             _require(actual["overlay_target"] == expected["overlay_target"], f"{expected['id']} overlay target mismatch")
             _require(actual["overlay_priority"] == expected["overlay_priority"], f"{expected['id']} overlay priority mismatch")
             _require(actual["overlay_is_static"] is True, f"{expected['id']} overlay is not static")
-        if expected["signer"] == "xos-platform":
-            _require(actual["certificate_sha256"] == signers["xos_platform_sha256"], f"{expected['id']} signer mismatch")
         actual["id"] = expected["id"]
         actual["status"] = "verified"
         package_reports.append(actual)
+
+        package_native = apk_native_report(path)
+        locked_native = {
+            row["member"]: row for row in expected_native.values() if row["package"] == expected["id"]
+        }
+        _require({row["member"] for row in package_native} == set(locked_native), f"{expected['id']} native member set mismatch")
+        for row in package_native:
+            locked = locked_native[row["member"]]
+            for field in ("size", "sha256", "elf_class", "machine", "needed"):
+                _require(row[field] == locked[field], f"{locked['id']} {field} mismatch")
+            native_reports.append({"id": locked["id"], "package": expected["id"], "status": "verified", **row})
 
     runtime_reports = []
     identities_to_lock = []
     for expected in profile["runtime_dependencies"]:
         path = _partition_file(roots, expected["path"])
         _require(path.is_file() and not path.is_symlink(), f"runtime dependency missing: {path}")
-        actual = {"id": expected["id"], "path": str(path), "size": path.stat().st_size, "sha256": sha256_file(path)}
-        _require(actual["size"] == expected["size"], f"{expected['id']} runtime size mismatch")
+        actual = {"id": expected["id"], **apk_report(path)}
+        for field in ("size", "package", "certificate_sha256"):
+            _require(actual[field] == expected[field], f"{expected['id']} runtime {field} mismatch")
         if expected.get("identity_state") == "verified":
             _require(actual["sha256"] == expected["sha256"], f"{expected['id']} runtime hash mismatch")
             actual["status"] = "verified"
@@ -852,11 +1231,46 @@ def command_verify_selection(profile: dict, _port: dict, summary: dict, args: ar
             identities_to_lock.append({"table": "runtime_dependencies", "id": expected["id"], "sha256": actual["sha256"]})
         runtime_reports.append(actual)
 
+    supplied_providers = _named_paths(args.embedded_provider, "embedded provider")
+    expected_providers = _unique_table(profile["embedded_providers"], "id", "embedded provider")
+    _require(set(supplied_providers) == set(expected_providers), "embedded provider input set mismatch")
+    provider_reports = []
+    for identifier, path in sorted(supplied_providers.items()):
+        expected = expected_providers[identifier]
+        inventory = archive_dex_inventory(path)
+        actual = {
+            "id": identifier,
+            "path": str(path),
+            "size": path.stat().st_size if path.is_file() else -1,
+            "sha256": sha256_file(path),
+            "defined_classes": len(inventory["defined"]),
+        }
+        for field in ("size", "sha256", "defined_classes"):
+            _require(actual[field] == expected[field], f"{identifier} embedded provider {field} mismatch")
+        actual["status"] = "verified"
+        provider_reports.append(actual)
+
+    supplied_payloads = _named_paths(args.apex_payload, "APEX payload")
+    expected_payloads = _unique_table(profile["apex_payloads"], "id", "APEX payload")
+    _require(set(supplied_payloads) == set(expected_payloads), "APEX payload input set mismatch")
+    payload_reports = [
+        verify_image(supplied_payloads[identifier], expected_payloads[identifier])
+        for identifier in sorted(supplied_payloads)
+    ]
+
     selection = profile["selection"]
-    product_upper = sum(tree_block_upper(_partition_file(roots, path)) for path in selection["product_paths"])
-    system_ext_upper = sum(tree_block_upper(_partition_file(roots, path)) for path in selection["system_ext_paths"])
-    _require(product_upper == profile["capacity"]["selected_product_upper"], "selected product tree upper bound mismatch")
-    _require(system_ext_upper == profile["capacity"]["selected_system_ext_upper"], "selected system_ext tree upper bound mismatch")
+    product_measured = sum(tree_block_upper(_partition_file(roots, path)) for path in selection["product_paths"])
+    system_ext_measured = sum(tree_block_upper(_partition_file(roots, path)) for path in selection["system_ext_paths"])
+    capacity = profile["capacity"]
+    _require(product_measured == capacity["selected_product_measured"], "selected product measurement mismatch")
+    _require(system_ext_measured == capacity["selected_system_ext_measured"], "selected system_ext measurement mismatch")
+    _require(product_measured <= capacity["selected_product_upper"], "selected product exceeds upper bound")
+    _require(system_ext_measured <= capacity["selected_system_ext_upper"], "selected system_ext exceeds upper bound")
+    runtime_upper = sum(
+        ((row["size"] + 4095) // 4096) * 4096
+        for row in runtime_reports if next(item for item in profile["runtime_dependencies"] if item["id"] == row["id"])["path"].startswith("/system_ext/")
+    )
+    _require(runtime_upper == capacity["selected_system_ext_runtime_upper"], "system_ext runtime upper bound mismatch")
 
     status = "verified" if not identities_to_lock else "measured-needs-identity-lock"
     report = {
@@ -864,22 +1278,54 @@ def command_verify_selection(profile: dict, _port: dict, summary: dict, args: ar
         "profile_sha256": summary["profile_sha256"],
         "packages": package_reports,
         "runtime_dependencies": runtime_reports,
+        "embedded_providers": provider_reports,
+        "apex_payloads": payload_reports,
+        "native_libraries": native_reports,
         "identities_to_lock": identities_to_lock,
-        "selected_product_upper": product_upper,
-        "selected_system_ext_upper": system_ext_upper,
+        "selected_product_measured": product_measured,
+        "selected_product_upper": capacity["selected_product_upper"],
+        "selected_system_ext_measured": system_ext_measured,
+        "selected_system_ext_upper": capacity["selected_system_ext_upper"],
+        "selected_system_ext_runtime_upper": runtime_upper,
     }
     if args.report:
         _atomic_report(args.report, report)
     print(json.dumps(report, indent=2, sort_keys=True))
 
 
-def command_verify_dex(_profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
+def command_verify_dex(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
     packages = _named_paths(args.package, "package")
     providers = _named_paths(args.provider, "provider")
+    expected_packages = _unique_table(profile["packages"], "id", "package")
+    scanned_packages = {identifier for identifier, row in expected_packages.items() if row["dex_scan"]}
+    _require(set(packages) == scanned_packages, "DEX package input set mismatch")
+    expected_providers = {
+        **_unique_table(profile["classpath_providers"], "id", "classpath provider"),
+        **_unique_table(profile["embedded_providers"], "id", "embedded provider"),
+    }
+    _require(set(providers) == set(expected_providers), "DEX provider input set mismatch")
+    _require(sorted(args.custom_prefix) == sorted(profile["classpaths"]["custom_prefixes"]), "DEX prefix input set mismatch")
+    for identifier, path in providers.items():
+        expected = expected_providers[identifier]
+        _require(path.is_file() and not path.is_symlink(), f"DEX provider is not regular: {path}")
+        _require(path.stat().st_size == expected["size"], f"{identifier} DEX provider size mismatch")
+        _require(sha256_file(path) == expected["sha256"], f"{identifier} DEX provider hash mismatch")
     report = {
         "profile_sha256": summary["profile_sha256"],
         **dex_resolution_report(packages, providers, args.custom_prefix),
     }
+    package_reports = {row["id"]: row for row in report["packages"]}
+    for identifier in sorted(scanned_packages):
+        actual = package_reports[identifier]
+        expected = expected_packages[identifier]
+        _require(
+            len(actual["custom_external_classes"]) == expected["custom_external_classes"],
+            f"{identifier} custom DEX class count mismatch",
+        )
+        _require(
+            len(actual["resolved_external_classes"]) == expected["resolved_external_classes"],
+            f"{identifier} resolved DEX class count mismatch",
+        )
     if args.report:
         _atomic_report(args.report, report)
     print(json.dumps(report, indent=2, sort_keys=True))
@@ -887,6 +1333,162 @@ def command_verify_dex(_profile: dict, _port: dict, summary: dict, args: argpars
         report["unresolved_external_classes"] == 0,
         f"{report['unresolved_external_classes']} custom external DEX classes are unresolved",
     )
+
+
+def command_verify_static(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
+    base_roots = {
+        "system": args.base_system_root,
+        "product": args.base_product_root,
+        "system_ext": args.base_system_ext_root,
+        "vendor": args.base_vendor_root,
+    }
+    donor_roots = {"system": args.donor_system_root, "system_ext": args.donor_system_ext_root}
+    android = profile["android_compatibility"]
+    property_inputs = {
+        "base_system": (_partition_file(base_roots, "/system/build.prop"), android["base_system_build_prop_sha256"]),
+        "base_vendor": (_partition_file(base_roots, "/vendor/build.prop"), android["base_vendor_build_prop_sha256"]),
+        "donor_system": (_partition_file(donor_roots, "/system/build.prop"), android["donor_system_build_prop_sha256"]),
+    }
+    properties = {}
+    for identifier, (path, expected_hash) in property_inputs.items():
+        actual_hash = sha256_file(path)
+        _require(actual_hash == expected_hash, f"{identifier} build.prop hash mismatch")
+        properties[identifier] = _property_file(path)
+    for identifier, prefix in (("base_system", "base"), ("donor_system", "donor")):
+        values = properties[identifier]
+        _require(int(values.get("ro.build.version.release", -1)) == android[f"{prefix}_release"], f"{identifier} release mismatch")
+        _require(int(values.get("ro.build.version.sdk", -1)) == android[f"{prefix}_sdk"], f"{identifier} SDK mismatch")
+        _require(values.get("ro.product.cpu.abilist", "").split(",") == android[f"{prefix}_abis"], f"{identifier} ABI list mismatch")
+    _require(
+        int(properties["base_vendor"].get("ro.vendor.build.version.sdk", -1)) == android["base_vendor_sdk"],
+        "base vendor SDK mismatch",
+    )
+    _require(
+        int(properties["base_vendor"].get("ro.product.first_api_level", -1)) == android["base_vendor_first_api_level"],
+        "base vendor first API mismatch",
+    )
+    android_report = {
+        "base_release": android["base_release"],
+        "donor_release": android["donor_release"],
+        "base_sdk": android["base_sdk"],
+        "donor_sdk": android["donor_sdk"],
+        "base_vendor_sdk": android["base_vendor_sdk"],
+        "base_vendor_first_api_level": android["base_vendor_first_api_level"],
+        "abis": android["base_abis"],
+        "build_prop_sha256": {key: expected for key, (_, expected) in property_inputs.items()},
+    }
+
+    matrix_paths = {
+        "base": _partition_file(base_roots, "/system/etc/vintf/compatibility_matrix.3.xml"),
+        "donor": _partition_file(donor_roots, "/system/etc/vintf/compatibility_matrix.3.xml"),
+    }
+    matrix_hashes = {identifier: sha256_file(path) for identifier, path in matrix_paths.items()}
+    expected_matrix = profile["vintf"]["matrix_level_3_sha256"]
+    _require(set(matrix_hashes.values()) == {expected_matrix}, "VINTF level-3 matrix mismatch")
+    manifest_path = _partition_file(base_roots, "/vendor/etc/vintf/manifest.xml")
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CompatibilityError(f"cannot read VINTF manifest {manifest_path}: {exc}") from exc
+    level_match = re.search(r"\btarget-level\s*=\s*[\"']([0-9]+)[\"']", manifest_text)
+    _require(level_match is not None, "base VINTF target level missing")
+    target_level = int(level_match.group(1))
+    _require(target_level == profile["vintf"]["target_manifest_level"], "base VINTF target level mismatch")
+    vintf_report = {"target_manifest_level": target_level, "matrix_level_3_sha256": matrix_hashes}
+
+    policy_inputs = {
+        "plat": (
+            _partition_file(base_roots, "/system/etc/selinux/plat_sepolicy_and_mapping.sha256"),
+            _partition_file(base_roots, "/vendor/etc/selinux/precompiled_sepolicy.plat_sepolicy_and_mapping.sha256"),
+            profile["selinux"]["plat_precompiled_sha256"],
+        ),
+        "product": (
+            _partition_file(base_roots, "/product/etc/selinux/product_sepolicy_and_mapping.sha256"),
+            _partition_file(base_roots, "/vendor/etc/selinux/precompiled_sepolicy.product_sepolicy_and_mapping.sha256"),
+            profile["selinux"]["product_precompiled_sha256"],
+        ),
+        "system_ext": (
+            _partition_file(base_roots, "/system_ext/etc/selinux/system_ext_sepolicy_and_mapping.sha256"),
+            _partition_file(base_roots, "/vendor/etc/selinux/precompiled_sepolicy.system_ext_sepolicy_and_mapping.sha256"),
+            profile["selinux"]["system_ext_precompiled_sha256"],
+        ),
+    }
+    policy_hashes = {}
+    for identifier, (source_path, vendor_path, expected) in policy_inputs.items():
+        try:
+            source_value = source_path.read_text(encoding="ascii").strip()
+            vendor_value = vendor_path.read_text(encoding="ascii").strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise CompatibilityError(f"cannot read SELinux hash evidence for {identifier}: {exc}") from exc
+        _require(source_value == vendor_value == expected, f"SELinux precompiled hash mismatch: {identifier}")
+        policy_hashes[identifier] = expected
+
+    donor_contexts = _service_contexts(
+        [
+            _partition_file(donor_roots, "/system/etc/selinux/plat_service_contexts"),
+            _partition_file(donor_roots, "/system_ext/etc/selinux/system_ext_service_contexts"),
+        ]
+    )
+    base_contexts = _service_contexts(
+        [
+            _partition_file(base_roots, "/system/etc/selinux/plat_service_contexts"),
+            _partition_file(base_roots, "/product/etc/selinux/product_service_contexts"),
+            _partition_file(base_roots, "/system_ext/etc/selinux/system_ext_service_contexts"),
+        ]
+    )
+    service_reports = []
+    base_values = set(base_contexts.values())
+    for service, target_type in sorted(profile["service_types"].items()):
+        _require(service in donor_contexts, f"donor service context missing: {service}")
+        target_context = f"u:object_r:{target_type}:s0"
+        _require(target_context in base_values, f"base service type missing: {target_type}")
+        service_reports.append(
+            {"service": service, "donor_context": donor_contexts[service], "mapped_base_context": target_context}
+        )
+    selinux_report = {
+        "precompiled_hashes": policy_hashes,
+        "allow_new_policy_types": False,
+        "service_mappings": service_reports,
+    }
+
+    layout = profile["layout"]
+    layout_paths = {
+        "base_init": _partition_file(base_roots, layout["base_init_path"]),
+        "base_fstab": _partition_file(base_roots, layout["base_fstab_path"]),
+    }
+    layout_report = {}
+    for identifier, path in layout_paths.items():
+        actual_hash = sha256_file(path)
+        _require(actual_hash == layout[f"{identifier}_sha256"], f"{identifier} hash mismatch")
+        layout_report[identifier] = {"locked_path": layout[f"{identifier}_path"], "sha256": actual_hash}
+
+    kernel = profile["kernel"]
+    kernel_report = boot_kernel_report(args.base_boot)
+    for actual_key, expected_key in (
+        ("boot_sha256", "base_boot_sha256"),
+        ("kernel_sha256", "compressed_kernel_sha256"),
+        ("kernel_size", "compressed_kernel_size"),
+        ("ikconfig_sha256", "ikconfig_sha256"),
+    ):
+        _require(kernel_report[actual_key] == kernel[expected_key], f"kernel {actual_key} mismatch")
+    missing_configs = sorted(set(kernel["required_builtins"]) - kernel_report["config_lines"])
+    _require(not missing_configs, f"required kernel config missing: {missing_configs[0] if missing_configs else ''}")
+    del kernel_report["config_lines"]
+    kernel_report["required_builtins"] = sorted(kernel["required_builtins"])
+    kernel_report["status"] = "verified"
+
+    report = {
+        "status": "verified",
+        "profile_sha256": summary["profile_sha256"],
+        "android": android_report,
+        "vintf": vintf_report,
+        "selinux": selinux_report,
+        "layout": layout_report,
+        "kernel": kernel_report,
+    }
+    if args.report:
+        _atomic_report(args.report, report)
+    print(json.dumps(report, indent=2, sort_keys=True))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -911,6 +1513,8 @@ def build_parser() -> argparse.ArgumentParser:
     selection_parser.add_argument("--system-root", type=Path, required=True)
     selection_parser.add_argument("--product-root", type=Path, required=True)
     selection_parser.add_argument("--system-ext-root", type=Path, required=True)
+    selection_parser.add_argument("--embedded-provider", action="append", required=True, metavar="ID=PATH")
+    selection_parser.add_argument("--apex-payload", action="append", required=True, metavar="ID=PATH")
     selection_parser.add_argument("--report", type=Path)
     selection_parser.set_defaults(handler=command_verify_selection)
 
@@ -920,6 +1524,17 @@ def build_parser() -> argparse.ArgumentParser:
     dex_parser.add_argument("--custom-prefix", action="append", required=True, metavar="LDESCRIPTOR/PREFIX/")
     dex_parser.add_argument("--report", type=Path)
     dex_parser.set_defaults(handler=command_verify_dex)
+
+    static_parser = subparsers.add_parser("verify-static", help="verify Android, VINTF, SELinux, layout, and kernel evidence")
+    static_parser.add_argument("--base-system-root", type=Path, required=True)
+    static_parser.add_argument("--base-product-root", type=Path, required=True)
+    static_parser.add_argument("--base-system-ext-root", type=Path, required=True)
+    static_parser.add_argument("--base-vendor-root", type=Path, required=True)
+    static_parser.add_argument("--donor-system-root", type=Path, required=True)
+    static_parser.add_argument("--donor-system-ext-root", type=Path, required=True)
+    static_parser.add_argument("--base-boot", type=Path, required=True)
+    static_parser.add_argument("--report", type=Path)
+    static_parser.set_defaults(handler=command_verify_static)
     return parser
 
 

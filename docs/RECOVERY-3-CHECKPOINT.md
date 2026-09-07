@@ -1,6 +1,6 @@
 # Case 3 recovery checkpoint
 
-Status: **in progress; not yet accepted**.
+Status: **recovery completed; Case 3 accepted on 2026-09-07**.
 
 This file is the durable restart point for the partition extraction and
 compatibility audit. It records only facts already measured from the locked
@@ -75,13 +75,14 @@ are zero-sized.
 | Donor product | 770,449 | 2,305 | 4,096 | 3,146,317,824 |
 | Donor system_ext | 409,986 | 1,240 | 4,096 | 1,674,223,616 |
 
-The selected product tree has a conservative 4 KiB-rounded upper bound of
-13,475,840 bytes. The selected system_ext tree upper bound is 282,091,520
-bytes. Counting the full base system and full donor system additively, before
-crediting any replaced files, gives a deliberately conservative total of
-3,023,675,392 bytes. Against the 3,583,086,592-byte target filesystem data
-area, the resulting headroom is **559,411,200 bytes**. The minimum locked
-reserve is 268,435,456 bytes.
+The selected product tree measured 6,787,072 bytes and has a conservative 4
+KiB-rounded upper bound of 13,475,840 bytes. The selected system_ext tree
+measured 280,444,928 bytes and has an upper bound of 282,091,520 bytes. Its
+separately counted runtime upper bound is 839,680 bytes. Counting the full base
+system and full donor system additively, before crediting any replaced files,
+gives a deliberately conservative total of 3,024,515,072 bytes. Against the
+3,583,086,592-byte target filesystem data area, the resulting headroom is
+**558,571,520 bytes**. The minimum locked reserve is 268,435,456 bytes.
 
 ## Compatibility decisions already established
 
@@ -134,17 +135,16 @@ libraries in SystemUI and Launcher require only standard Android 32-bit and
 The repository now includes `compatctl.py verify-dex`, which parses every
 `classes*.dex` member directly, inventories defined and referenced object
 descriptors, and maps each custom external reference to the exact supplied
-provider archive. The earlier result above remains evidence, but Case 3 is not
-accepted until a fresh run against the rematerialized payload produces the
-durable report.
+provider archive. The recovered payload passed the selection, DEX, and static
+verifiers with zero pending identities and zero unresolved custom classes.
+The final evidence, corrected drift, shared-UID decision, and keep/remove/patch
+matrix are recorded in [CASE-3-REPORT.md](CASE-3-REPORT.md).
 
 ## Durable checkpoints
 
-1. Image conversion and LP extraction tool plus unit tests: pushed on branch
-   `case/3-compatibility-audit`.
-2. Locked compatibility profile, static validator, and unit tests: included in
-   this branch checkpoint.
-3. Fresh payload verification report and final Case 3 documentation: pending.
-4. Pull-request CI, merge, and post-merge CI: pending.
+1. Image conversion and LP extraction tool plus unit tests: complete.
+2. Locked compatibility profile, static validator, and unit tests: complete.
+3. Fresh payload verification and final Case 3 report: complete.
+4. Pull-request CI, merge, and post-merge CI: the repository integration gate.
 
-Case 4 must not start until checkpoints 2 through 4 pass.
+Case 4 must not start until checkpoint 4 passes.

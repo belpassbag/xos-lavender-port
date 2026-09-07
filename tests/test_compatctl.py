@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import gzip
 import importlib.util
 from pathlib import Path
 import struct
@@ -82,7 +83,7 @@ def start_element(strings: list[str], name: str, attributes: list[tuple[str, obj
         )
     chunk_size = 36 + len(encoded_attributes)
     return (
-        struct.pack("<HHI", compatctl.RES_XML_START_ELEMENT_TYPE, 36, chunk_size)
+        struct.pack("<HHI", compatctl.RES_XML_START_ELEMENT_TYPE, 16, chunk_size)
         + struct.pack("<II", 1, compatctl.NO_INDEX)
         + struct.pack(
             "<IIHHHHHH",
@@ -192,6 +193,57 @@ def dex_archive(path: Path, descriptors: list[str], defined: list[str]) -> None:
         archive.writestr("classes.dex", dex_fixture(descriptors, defined))
 
 
+def elf64_fixture(needed: list[str]) -> bytes:
+    strings = bytearray(b"\0")
+    string_offsets = []
+    for name in needed:
+        string_offsets.append(len(strings))
+        strings.extend(name.encode("ascii") + b"\0")
+    dynamic = b"".join(struct.pack("<qQ", 1, offset) for offset in string_offsets)
+    dynamic += struct.pack("<qQ", 0, 0)
+    string_offset = 64
+    dynamic_offset = string_offset + len(strings)
+    section_offset = dynamic_offset + len(dynamic)
+    result = bytearray(section_offset + 3 * 64)
+    result[:16] = b"\x7fELF\x02\x01\x01" + b"\0" * 9
+    struct.pack_into(
+        "<HHIQQQIHHHHHH",
+        result,
+        16,
+        3,
+        183,
+        1,
+        0,
+        0,
+        section_offset,
+        0,
+        64,
+        0,
+        0,
+        64,
+        3,
+        0,
+    )
+    result[string_offset : string_offset + len(strings)] = strings
+    result[dynamic_offset : dynamic_offset + len(dynamic)] = dynamic
+    struct.pack_into("<IIQQQQIIQQ", result, section_offset + 64, 0, 3, 0, 0, string_offset, len(strings), 0, 0, 1, 0)
+    struct.pack_into("<IIQQQQIIQQ", result, section_offset + 128, 0, 6, 0, 0, dynamic_offset, len(dynamic), 1, 0, 8, 16)
+    return bytes(result)
+
+
+def boot_fixture(config: bytes) -> bytes:
+    packed_config = gzip.compress(config, mtime=0)
+    expanded_kernel = b"kernel-prefix" + b"IKCFG_ST" + packed_config + b"IKCFG_ED" + b"kernel-suffix"
+    compressed_kernel = gzip.compress(expanded_kernel, mtime=0) + b"appended-dtb"
+    page_size = 4096
+    result = bytearray(page_size + len(compressed_kernel))
+    result[:8] = b"ANDROID!"
+    struct.pack_into("<I", result, 8, len(compressed_kernel))
+    struct.pack_into("<I", result, 36, page_size)
+    result[page_size:] = compressed_kernel
+    return bytes(result)
+
+
 class CompatibilityProfileTests(unittest.TestCase):
     def load(self) -> tuple[dict, dict]:
         return (
@@ -202,8 +254,12 @@ class CompatibilityProfileTests(unittest.TestCase):
     def test_repository_profile_is_locked_and_valid(self) -> None:
         profile, port = self.load()
         summary = compatctl.validate_profile(profile, port)
-        self.assertEqual(summary["headroom"], 559_411_200)
+        self.assertEqual(summary["headroom"], 558_571_520)
         self.assertEqual(summary["packages"], 8)
+        self.assertEqual(summary["pending_identities"], 0)
+        self.assertEqual(summary["base_apks_scanned"], 107)
+        self.assertEqual(summary["donor_apks_scanned"], 237)
+        self.assertEqual(summary["shared_uid_conflicts"], 1)
 
     def test_rejects_semantic_profile_mutations(self) -> None:
         profile, port = self.load()
@@ -212,7 +268,10 @@ class CompatibilityProfileTests(unittest.TestCase):
             "service map": lambda value: value["service_types"].pop("kolun"),
             "product path": lambda value: value["selection"]["product_paths"].append("/product/app/Extra"),
             "shared UID signer": lambda value: value["packages"][4].__setitem__("signer", "standalone"),
-            "runtime identity": lambda value: value["runtime_dependencies"][0].__setitem__("identity_state", "verified"),
+            "shared UID strategy": lambda value: value["shared_uid_audit"].__setitem__(
+                "global_signature_bypass_forbidden", False
+            ),
+            "runtime identity": lambda value: value["runtime_dependencies"][0].pop("sha256"),
             "SELinux types": lambda value: value["selinux"].__setitem__("allow_new_policy_types", True),
         }
         for label, mutation in mutations.items():
@@ -281,6 +340,15 @@ class ParserTests(unittest.TestCase):
             {"Lapp/Main;", "Lvendor/runtime/Api;"},
         )
 
+    def test_decodes_dex_modified_utf8(self) -> None:
+        encoded = uleb128(4) + b"A\xc0\x80\xed\xa0\xbd\xed\xb8\x80\0"
+        self.assertEqual(compatctl._dex_string(encoded, 0), "A\0\U0001f600")
+
+    def test_rejects_dex_modified_utf8_size_mismatch(self) -> None:
+        encoded = uleb128(2) + b"A\0"
+        with self.assertRaisesRegex(compatctl.CompatibilityError, "UTF-16 size"):
+            compatctl._dex_string(encoded, 0)
+
     def test_resolves_custom_dex_classes_to_exact_provider(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -332,12 +400,35 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(compatctl.CompatibilityError):
             compatctl.dex_inventory(bytes(data))
 
+    def test_reads_elf_needed_libraries(self) -> None:
+        report = compatctl.elf_report(elf64_fixture(["liblog.so", "libc.so"]))
+        self.assertEqual(report["elf_class"], 64)
+        self.assertEqual(report["machine"], "AArch64")
+        self.assertEqual(report["needed"], ["libc.so", "liblog.so"])
+
+    def test_extracts_boot_ikconfig(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "boot.img"
+            path.write_bytes(boot_fixture(b"CONFIG_EXT4_FS=y\n"))
+            report = compatctl.boot_kernel_report(path)
+        self.assertIn("CONFIG_EXT4_FS=y", report["config_lines"])
+        self.assertEqual(report["appended_dtb_size"], len(b"appended-dtb"))
+
+    def test_allows_identical_but_rejects_conflicting_properties(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "build.prop"
+            path.write_text("ro.example=value\nro.example=value\n", encoding="utf-8")
+            self.assertEqual(compatctl._property_file(path), {"ro.example": "value"})
+            path.write_text("ro.example=one\nro.example=two\n", encoding="utf-8")
+            with self.assertRaisesRegex(compatctl.CompatibilityError, "conflicting duplicate"):
+                compatctl._property_file(path)
+
     def test_tree_upper_bound_and_symlink_guard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "one").write_bytes(b"x")
             (root / "two").write_bytes(b"x" * 4097)
-            self.assertEqual(compatctl.tree_block_upper(root), 12_288)
+            self.assertEqual(compatctl.tree_block_upper(root), 16_384)
             (root / "escape").symlink_to(root / "one")
             with self.assertRaises(compatctl.CompatibilityError):
                 compatctl.tree_block_upper(root)
