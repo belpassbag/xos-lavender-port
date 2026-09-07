@@ -81,12 +81,14 @@ full source revalidation,
 [docs/RECOVERY-3-CHECKPOINT.md](docs/RECOVERY-3-CHECKPOINT.md) for the durable
 Case 3 restart point, [docs/CASE-3-REPORT.md](docs/CASE-3-REPORT.md) for the
 accepted compatibility evidence and keep/remove/patch matrix, and
-[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
+[docs/CASE-4-CHECKPOINT.md](docs/CASE-4-CHECKPOINT.md) for the active XOS core
+pipeline boundary. See [docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case
+execution plan.
 
 ## Status
 
 Cases 1 through 3 are accepted: source intake and reconstruction are byte-exact,
 the resumable extraction path is verified, and the selected XOS core passes the
-locked capacity and static compatibility audit. Case 4 has not started. Its
-first approval gate is selection of the unified port platform-signing key. No
-ROM has been built or flashed.
+locked capacity and static compatibility audit. Case 4 is in progress using the
+approved project development-signing strategy; production signing remains
+deferred until the ROM is stable. No ROM has been built or flashed.
