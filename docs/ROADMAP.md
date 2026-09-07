@@ -31,6 +31,8 @@ The recovery evidence is recorded in [RECOVERY-2.md](RECOVERY-2.md).
 
 ## Case 3 — Partition extraction and compatibility audit
 
+Status: **accepted on 2026-09-07; static compatibility gates pass**.
+
 - Convert Lineage block OTA payloads to target system/vendor images.
 - Convert sparse donor `super.img` and extract logical partitions.
 - Measure filesystem use and partition headroom.
@@ -40,7 +42,14 @@ The recovery evidence is recorded in [RECOVERY-2.md](RECOVERY-2.md).
 Acceptance: a fact-backed keep/remove/patch matrix exists and the selected XOS
 core payload fits the stock `lavender` system partition.
 
+The recovery boundary is recorded in
+[RECOVERY-3-CHECKPOINT.md](RECOVERY-3-CHECKPOINT.md). The final measured
+evidence, drift corrections, signing decision, and keep/remove/patch matrix are
+recorded in [CASE-3-REPORT.md](CASE-3-REPORT.md).
+
 ## Case 4 — XOS Core port pipeline
+
+Status: **not started; signing-key selection is the next approval gate**.
 
 - Preserve the Lineage system-as-root bootstrap and Qualcomm hardware stack.
 - Transplant the donor TSSI framework and selected XOS core components.

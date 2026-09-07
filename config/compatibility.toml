@@ -1,0 +1,570 @@
+schema_version = 1
+
+[project]
+device = "lavender"
+donor = "Infinix-X6812B"
+android_version = 11
+sdk = 30
+architecture = "arm64"
+port_profile_canonical_sha256 = "0f784e780af49ebf9d7dd53233bd034c3abc0e9833df2f29fa58fcc3b0ce648a"
+
+[[images]]
+id = "base_system"
+role = "target"
+size = 3640619008
+sha256 = "3536fa28745278ecbd38cc0a0f09329a1c19cf1f959aeb189ee71c1c9f904501"
+block_count = 874777
+free_blocks = 477417
+block_size = 4096
+
+[[images]]
+id = "base_vendor"
+role = "target"
+size = 2080305152
+sha256 = "967a4b560b774e869a5ce16f6b5ee6b73dedfdfde7fa4ef641b3b9cdce4f8f60"
+block_count = 499853
+free_blocks = 369676
+block_size = 4096
+
+[[images]]
+id = "donor_system"
+role = "framework-source"
+size = 1121648640
+sha256 = "2fb5bf44091b6ddd9d63799351c38f75c26499809f6db832e24ced3f5700313d"
+block_count = 269498
+free_blocks = 816
+block_size = 4096
+
+[[images]]
+id = "donor_product"
+role = "allowlist-source"
+size = 3206438912
+sha256 = "a3e760d683423b419f2b859fbf3ac24cfd41276939291e819cbeb05e9db6fcbb"
+block_count = 770449
+free_blocks = 2305
+block_size = 4096
+
+[[images]]
+id = "donor_system_ext"
+role = "allowlist-source"
+size = 1706311680
+sha256 = "7de9ac35bd7c51e683b86546278e2c630024e9f8c9a01c9d4b99f1836324b002"
+block_count = 409986
+free_blocks = 1240
+block_size = 4096
+
+[super]
+sparse_size = 6808452712
+expanded_size = 7345774592
+sha256 = "7b622c6fa90c909f2bdde39d0344dcadfb576662a33b447a9d6b0808d362a383"
+logical_block_size = 4096
+metadata_slots = 3
+vendor_a_size = 853602304
+selected_b_partitions_are_empty = true
+
+[capacity]
+target_filesystem_data_size = 3583086592
+base_system_used = 1627586560
+donor_system_used = 1100521472
+selected_product_measured = 6787072
+selected_system_ext_measured = 280444928
+selected_product_upper = 13475840
+selected_system_ext_upper = 282091520
+selected_system_ext_runtime_upper = 839680
+conservative_total = 3024515072
+headroom = 558571520
+minimum_reserve = 268435456
+
+[android_compatibility]
+base_release = 11
+donor_release = 11
+base_sdk = 30
+donor_sdk = 30
+base_vendor_sdk = 30
+base_vendor_first_api_level = 28
+base_abis = ["arm64-v8a", "armeabi-v7a", "armeabi"]
+donor_abis = ["arm64-v8a", "armeabi-v7a", "armeabi"]
+base_system_build_prop_sha256 = "4651c1d4af39cb89c03e9f68dc2b02c97a89a42b9cba1477f18e9ea04332d5b7"
+donor_system_build_prop_sha256 = "347b082ec70b77301f6035e0ad63fba902d3588b781b0d218184f389d478ecca"
+base_vendor_build_prop_sha256 = "7713ae48a90240960d589af3cf16766e68f9a4f5a39cb52aabf458ebe731c67d"
+
+[vintf]
+preserve = "base"
+target_manifest_level = 3
+matrix_level_3_sha256 = "67edd789de4bd35d47e14c2365de082b9ee64ade0c1ca77e2842f3a2015af8b5"
+base_and_donor_matrix_match = true
+
+[selinux]
+preserve_base_cil_and_mappings = true
+allow_new_policy_types = false
+plat_precompiled_sha256 = "23f3b45bb1932c664d94cf157f2a9cda8d6415321383b97cd59da17321e80e9c"
+product_precompiled_sha256 = "5e7d483f16bc3b339e9dc63ce0a0f4a35263ee48e340bafe47fb10464368f653"
+system_ext_precompiled_sha256 = "d2a9ddfc73981f04a363623b1ade22849abf9288cf94118c6ebb13c8d5ba4f7f"
+
+[kernel]
+base_boot_sha256 = "a7cd135d7e11aa722b98b2306280b3d2a1d28e8e3025fc22c36855d8c8a6dedd"
+compressed_kernel_sha256 = "9a0fa983985ba52b93906ceb8fa6794d0f47e3c513b1586a98fd7455e5ccb3ac"
+compressed_kernel_size = 13573602
+ikconfig_sha256 = "18393b06e75f260a5b890f47161615c9d8b95b27ee7ef3fe8109269e42232945"
+required_builtins = [
+  "CONFIG_BLK_DEV_LOOP=y",
+  "CONFIG_DM_VERITY=y",
+  "CONFIG_DM_VERITY_FEC=y",
+  "CONFIG_EXT4_FS=y",
+  "CONFIG_SECURITY_SELINUX=y",
+]
+packaged_apex_payload_filesystem = "ext4"
+
+[[apex_payloads]]
+id = "os_framework_apex"
+size = 942080
+sha256 = "f3d472ea6d5f13e412979bb42c7af2e6f862bb891261d29df893ee504bcf2f9d"
+block_count = 228
+free_blocks = 7
+block_size = 4096
+
+[[apex_payloads]]
+id = "kolun_apex"
+size = 573440
+sha256 = "9e4874e83292956f3d48e78cc1debecf97890dbdcfd73db2f7f9a97c466e1ec3"
+block_count = 138
+free_blocks = 7
+block_size = 4096
+
+[signers]
+base_platform_sha256 = "59988fff31e2f85fbaddc5b37704be97d1c5b7db72a4fb2ed5f07b58ccf20ccf"
+xos_platform_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+mixed_shared_uid_signers_forbidden = true
+
+[shared_uid_audit]
+base_apks_scanned = 107
+base_shared_uid_packages = 44
+donor_apks_scanned = 237
+donor_shared_uid_packages = 83
+parse_failures = 0
+selected_shared_uids = ["android.uid.system", "android.uid.systemui"]
+retained_conflicting_shared_uids = ["android.uid.system"]
+case4_strategy = "unified-port-platform-signing"
+resign_included_platform_apks = true
+preserve_standalone_apk_signers = true
+preserve_apex_signers = true
+update_mac_permissions_signer = true
+verify_single_certificate_per_shared_uid = true
+remove_shared_uid_forbidden = true
+global_signature_bypass_forbidden = true
+key_selection_requires_approval = true
+
+[layout]
+preserve_base_system_as_root = true
+base_product_target = "/system/product"
+base_system_ext_target = "/system/system_ext"
+preserve_base_init = true
+preserve_base_fstab = true
+base_init_path = "/system/etc/init/hw/init.rc"
+base_init_sha256 = "1496caa9b6a176a01f00ead4386887fbaee4efb4e2fb59328d3eb41284770c4c"
+base_fstab_path = "/vendor/etc/fstab.qcom"
+base_fstab_sha256 = "7db565bc487a8916b908fb712ec6b5bc1ad861036cf72f718e6517aca8116d05"
+
+[selection]
+product_mode = "allowlist-only"
+system_ext_mode = "allowlist-only"
+discard_preopt = true
+selected_apk_bytes = 286326703
+selected_package_directory_bytes = 287141584
+product_paths = [
+  "/product/app/SystemUIOverlay",
+  "/product/app/SettingsOverlay",
+  "/product/priv-app/XOSLauncher_res",
+]
+system_ext_paths = [
+  "/system_ext/priv-app/TranSystemUI",
+  "/system_ext/priv-app/TranSettings",
+  "/system_ext/priv-app/TranSettingsIntelligence",
+  "/system_ext/app/XLauncher",
+  "/system_ext/app/OSSettingsExt",
+]
+
+[exclusions]
+retain_base_phone_shared_uid_group = true
+retain_base_qti_system_ext = true
+retain_base_bluetooth = true
+exclude_donor_phone_shared_uid_group = true
+exclude_donor_mtk_bluetooth = true
+exclude_donor_hardware_services = true
+exclude_donor_generated_rros = true
+paths = [
+  "/product/operator",
+  "/system_ext/app/TranssionCamera",
+  "/system_ext/app/FaceID",
+  "/system_ext/app/Nfc_st",
+  "/system_ext/app/CalibrationTool2",
+  "/system_ext/app/AfterSaleCalibrationTool",
+  "/system_ext/app/VideoCallEnhancer",
+]
+
+[service_types]
+kolun = "activity_service"
+gamemode_helper = "activity_service"
+sand_accessor = "activity_service"
+os_audio_change = "audio_service"
+tran_appm = "system_config_service"
+tran_resmonitor = "system_config_service"
+tran_tranlog = "system_config_service"
+tranlog_sub = "system_config_service"
+tran_pwhub = "power_service"
+
+[classpaths]
+strategy = "donor-xos-runtime-plus-base-qti"
+custom_prefixes = ["Lcom/mediatek/", "Lcom/transsion/", "Ltranssion/"]
+required_donor_jars = [
+  "framework.jar",
+  "services.jar",
+  "ext.jar",
+  "mediatek-common.jar",
+  "mediatek-ims-common.jar",
+  "mediatek-telephony-base.jar",
+  "mediatek-telephony-common.jar",
+  "os-framework.jar",
+  "os-services.jar",
+  "kolun.jar",
+  "kolunlibrary.jar",
+]
+required_base_jars = ["org.ifaa.android.manager.jar", "telephony-ext.jar"]
+
+[[classpath_providers]]
+id = "framework.jar"
+source = "donor-system"
+path = "/system/framework/framework.jar"
+size = 30599274
+sha256 = "c3ce3c4750ffcd81f0816322b62cf724f719205abdbf43dd0c2a8b6b71b70b1f"
+defined_classes = 19420
+
+[[classpath_providers]]
+id = "services.jar"
+source = "donor-system"
+path = "/system/framework/services.jar"
+size = 16120187
+sha256 = "5db608f7e199ed541797e51cbc0119fd054b766e5cb7c22bbbb35c0fe0820453"
+defined_classes = 8356
+
+[[classpath_providers]]
+id = "ext.jar"
+source = "donor-system"
+path = "/system/framework/ext.jar"
+size = 2326334
+sha256 = "105534730f75fe45a6be4102cfe7e394d3c697581b98560595ced7c36bc0675b"
+defined_classes = 86
+
+[[classpath_providers]]
+id = "mediatek-common.jar"
+source = "donor-system"
+path = "/system/framework/mediatek-common.jar"
+size = 112830
+sha256 = "e02fa87f15345b5b5be677bb6cd5af26d7db4e05702b725859d77de8aec95786"
+defined_classes = 100
+
+[[classpath_providers]]
+id = "mediatek-ims-common.jar"
+source = "donor-system"
+path = "/system/framework/mediatek-ims-common.jar"
+size = 71902
+sha256 = "bc52231f19df80bf29620a996b9ca8c73406cf10bfc5c57abb31e4b885821d21"
+defined_classes = 19
+
+[[classpath_providers]]
+id = "mediatek-telephony-base.jar"
+source = "donor-system"
+path = "/system/framework/mediatek-telephony-base.jar"
+size = 356150
+sha256 = "5b6e379bbf72a85c8cfef6f23b7e3966bb2b5a9f1a39a9de4079adf725802c54"
+defined_classes = 133
+
+[[classpath_providers]]
+id = "mediatek-telephony-common.jar"
+source = "donor-system"
+path = "/system/framework/mediatek-telephony-common.jar"
+size = 2377330
+sha256 = "92fd8cff9b6fc82db91da2f9088579ce8534d56f86c4b9ec7bc515b47745643c"
+defined_classes = 686
+
+[[classpath_providers]]
+id = "org.ifaa.android.manager.jar"
+source = "base-system"
+path = "/system/framework/org.ifaa.android.manager.jar"
+size = 17354
+sha256 = "54bb3ee67cd86e581f7ee368da9b270520fbac218f0fae44142d6fd1ede62f2d"
+defined_classes = 12
+
+[[classpath_providers]]
+id = "telephony-ext.jar"
+source = "base-system"
+path = "/system/framework/telephony-ext.jar"
+size = 56202
+sha256 = "164591017d5a5a8b7df39b49a17dd1a2a129386d4aebce9dd47dfaa9092c1477"
+defined_classes = 38
+
+[[runtime_dependencies]]
+id = "os_framework_apex"
+path = "/system/apex/com.transsion.mi.os.framework.apex"
+size = 989949
+sha256 = "a2b648e722552065cd2e06ee9a90c6796384f6154bcdbd5ed1af5ca611a46cc9"
+package = "com.transsion.mi.os.framework"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+identity_state = "verified"
+
+[[runtime_dependencies]]
+id = "kolun_apex"
+path = "/system_ext/apex/com.transsion.kolun.apex"
+size = 620913
+sha256 = "e97e6533e4423a7062f18c52f26a593d2dc24e365ceefcfd07dbd5f3ca684ab9"
+package = "com.transsion.kolun"
+certificate_sha256 = "a448403f86d0bb5e826595041c7defec86e76132e554744d670cbbbb47efd23c"
+identity_state = "verified"
+
+[[runtime_dependencies]]
+id = "transsion_resources"
+path = "/system_ext/framework/transsion-res.apk"
+size = 214684
+sha256 = "2a18d0892a0cb64180a728f0a14ce10f76dd2615d660ee6d6f188e88e77aea70"
+package = "com.transsion"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "os-framework.jar"
+container = "os_framework_apex"
+path = "/javalib/os-framework.jar"
+size = 326966
+sha256 = "ccca4c82b30ac931fc44fb61377ad9fcb43d0e7a64884c55942c798105f0cfda"
+defined_classes = 332
+classpath_required = true
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "os-services.jar"
+container = "os_framework_apex"
+path = "/javalib/os-services.jar"
+size = 517122
+sha256 = "dedd5254a40f6a05f6e06336e74cf6c1f4d2ddbd78ddf34126f216dcacc939d2"
+defined_classes = 424
+classpath_required = true
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "kolun.jar"
+container = "kolun_apex"
+path = "/javalib/kolun.jar"
+size = 216998
+sha256 = "583d47c602f21420566e7cfe65d40f5dce756ddd1b5fa74236f2dac03b22c7b8"
+defined_classes = 232
+classpath_required = true
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "kolunlibrary.jar"
+container = "kolun_apex"
+path = "/javalib/kolunlibrary.jar"
+size = 850
+sha256 = "4becc2149f361f86dd5cb95d2caf0c2bd10d307347942975212d209cc6466a22"
+defined_classes = 1
+classpath_required = true
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "proxy.jar"
+container = "kolun_apex"
+path = "/javalib/proxy.jar"
+size = 17866
+sha256 = "b9dd7980388271afd87e2764b42fd6dc4e721934a6b91152249a7379434f5fe5"
+defined_classes = 9
+classpath_required = false
+identity_state = "verified"
+
+[[embedded_providers]]
+id = "proxy_sprd.jar"
+container = "kolun_apex"
+path = "/javalib/proxy_sprd.jar"
+size = 16330
+sha256 = "616a3219794b7ab25fc29e79937c840c78319f3bbbc1da90859a2e5c6773ee2b"
+defined_classes = 9
+classpath_required = false
+identity_state = "verified"
+
+[[packages]]
+id = "TranSystemUI"
+path = "/system_ext/priv-app/TranSystemUI/TranSystemUI.apk"
+package = "com.android.systemui"
+shared_uid = "android.uid.systemui"
+signer = "xos-platform"
+size = 87861843
+sha256 = "d46d5df633da21ee41ea3719d8510d69b03e11a34f8208c06c4170632f8c2efd"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = ["arm64-v8a", "armeabi-v7a"]
+uses_libraries = []
+dex_scan = true
+custom_external_classes = 3
+resolved_external_classes = 3
+
+[[packages]]
+id = "TranSettings"
+path = "/system_ext/priv-app/TranSettings/TranSettings.apk"
+package = "com.android.settings"
+shared_uid = "android.uid.system"
+signer = "xos-platform"
+size = 131176072
+sha256 = "810ae8d6d12f875a7815f5372d695eb997c459b6c30db45814fa5206f622661e"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = []
+uses_libraries = ["org.apache.http.legacy"]
+dex_scan = true
+custom_external_classes = 23
+resolved_external_classes = 23
+
+[[packages]]
+id = "TranSettingsIntelligence"
+path = "/system_ext/priv-app/TranSettingsIntelligence/TranSettingsIntelligence.apk"
+package = "com.android.settings.intelligence"
+shared_uid = ""
+signer = "standalone"
+size = 4394905
+sha256 = "d5cb1bc537223c32ba277bec726ab1102299a8d72f80e1409048ad0a9b858bbd"
+certificate_sha256 = "a7e2e584fd1e865551aeca7a4110d8b9c0ba9b1fe6c3b7807d564a45557a5e71"
+abis = []
+uses_libraries = []
+dex_scan = true
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "XLauncher"
+path = "/system_ext/app/XLauncher/XLauncher.apk"
+package = "com.transsion.XOSLauncher"
+shared_uid = ""
+signer = "standalone"
+size = 37277083
+sha256 = "220b345611e97833068efbe48f88e79e5ab276f744a1cd88bf8683018816b02a"
+certificate_sha256 = "18b3bb71558ee28661f576d0796fcc222195a94f30bcce04d9a503925c2059af"
+abis = ["arm64-v8a", "armeabi", "armeabi-v7a"]
+uses_libraries = ["org.apache.http.legacy"]
+dex_scan = true
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "OSSettingsExt"
+path = "/system_ext/app/OSSettingsExt/OSSettingsExt.apk"
+package = "com.transsion.ossettingsext"
+shared_uid = "android.uid.system"
+signer = "xos-platform"
+size = 18851477
+sha256 = "33da4a1c9d485f0bfcc14e1d1601365435b130cacf3690ddc0e1c8f619bc4727"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = []
+uses_libraries = []
+dex_scan = true
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "SystemUIOverlay"
+path = "/product/app/SystemUIOverlay/SystemUIOverlay.apk"
+package = "com.android.systemui.os.overlay"
+shared_uid = ""
+signer = "xos-platform"
+size = 12728
+sha256 = "e1f7ac808732af8c374f10e629ede9b88747d88a31c5c6b75cc25e037103b3b1"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = []
+uses_libraries = []
+overlay_target = "com.android.systemui"
+overlay_priority = 2
+dex_scan = false
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "SettingsOverlay"
+path = "/product/app/SettingsOverlay/SettingsOverlay.apk"
+package = "com.android.settings.os.overlay"
+shared_uid = ""
+signer = "xos-platform"
+size = 16941
+sha256 = "2b7fdf6aab6f178eb86c95b74eb729632f7c82058365f30bedea7f3ab1af1569"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = []
+uses_libraries = []
+overlay_target = "com.android.settings"
+overlay_priority = 2
+dex_scan = false
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[packages]]
+id = "XOSLauncher_res"
+path = "/product/priv-app/XOSLauncher_res/XOSLauncher_res.apk"
+package = "com.infinix"
+shared_uid = ""
+signer = "xos-platform"
+size = 6735654
+sha256 = "c293c97fd96dfbb387fa90b0d5184039c4557373a0a074ba878a632dfbad62e6"
+certificate_sha256 = "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f"
+abis = []
+uses_libraries = []
+dex_scan = false
+custom_external_classes = 0
+resolved_external_classes = 0
+
+[[native_libraries]]
+id = "TranSystemUI:arm64-v8a:libframesequence.so"
+package = "TranSystemUI"
+member = "lib/arm64-v8a/libframesequence.so"
+elf_class = 64
+machine = "AArch64"
+size = 453208
+sha256 = "2dc690217c2d6de06b7a5718bf5d106bb5250b3c720cbde8525fc90338a931ed"
+needed = ["libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so"]
+
+[[native_libraries]]
+id = "TranSystemUI:armeabi-v7a:libframesequence.so"
+package = "TranSystemUI"
+member = "lib/armeabi-v7a/libframesequence.so"
+elf_class = 32
+machine = "ARM"
+size = 227280
+sha256 = "7dd8b99cdd0b570259b602d5fe5a0e1d48cb7ebaf0915473f894fd425397f345"
+needed = ["libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so"]
+
+[[native_libraries]]
+id = "XLauncher:arm64-v8a:libtranssiontheme.so"
+package = "XLauncher"
+member = "lib/arm64-v8a/libtranssiontheme.so"
+elf_class = 64
+machine = "AArch64"
+size = 206720
+sha256 = "72d8fb288a6ca63a271750bb3f097902a224fb006a2d0a0c2ad3de416d66af9e"
+needed = ["libandroid.so", "libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so", "libstdc++.so", "libz.so"]
+
+[[native_libraries]]
+id = "XLauncher:armeabi-v7a:libtranssiontheme.so"
+package = "XLauncher"
+member = "lib/armeabi-v7a/libtranssiontheme.so"
+elf_class = 32
+machine = "ARM"
+size = 165452
+sha256 = "06b6bdb6f6b2c24a70c8613c64e69625bd9c1ec1c4f115eb79624e40dc801a80"
+needed = ["libandroid.so", "libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so", "libstdc++.so", "libz.so"]
+
+[[native_libraries]]
+id = "XLauncher:armeabi:libtranssiontheme.so"
+package = "XLauncher"
+member = "lib/armeabi/libtranssiontheme.so"
+elf_class = 32
+machine = "ARM"
+size = 177728
+sha256 = "815cc1433c5ca297c9078e7ebaca816899673701e4ced5c6f53cb88a30624d7b"
+needed = ["libandroid.so", "libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so", "libstdc++.so", "libz.so"]
+
+[native_compatibility]
+base_abis = ["arm64-v8a", "armeabi-v7a", "armeabi"]
+base_system_provides = ["libandroid.so", "libc.so", "libdl.so", "libjnigraphics.so", "liblog.so", "libm.so", "libstdc++.so", "libz.so"]
+all_needed_present_in_base_32_and_64 = true

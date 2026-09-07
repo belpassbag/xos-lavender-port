@@ -46,6 +46,18 @@ project scope.
    python3 tools/portctl.py assemble donor --parts-dir incoming --output-dir work/sources
    ```
 
+   For a shared Google Drive folder, first create a two-column local ID map
+   (`DRIVE_FILE_ID PART_FILENAME`) from the authenticated folder listing. The
+   downloader resumes at verified part boundaries, uses an exclusive lock, and
+   publishes each part only after its SHA-256 matches:
+
+   ```bash
+   scripts/download-drive-parts.sh SHA256SUMS-parts.txt drive-ids.txt incoming lineage.zip.part-
+   scripts/download-drive-parts.sh SHA256SUMS-parts.txt drive-ids.txt incoming xos.zip.part-
+   ```
+
+   Drive IDs remain runtime inputs and are not committed to this repository.
+
 4. Audit the reconstructed archives and extract only the case-approved payloads:
 
    ```bash
@@ -65,11 +77,16 @@ See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
 [docs/MATERIALIZATION.md](docs/MATERIALIZATION.md) for the accepted source
 materialization evidence, [docs/RECOVERY-1.md](docs/RECOVERY-1.md) for the
 safety hardening evidence, [docs/RECOVERY-2.md](docs/RECOVERY-2.md) for the
-full source revalidation, and [docs/ROADMAP.md](docs/ROADMAP.md) for the
-case-by-case execution plan.
+full source revalidation,
+[docs/RECOVERY-3-CHECKPOINT.md](docs/RECOVERY-3-CHECKPOINT.md) for the durable
+Case 3 restart point, [docs/CASE-3-REPORT.md](docs/CASE-3-REPORT.md) for the
+accepted compatibility evidence and keep/remove/patch matrix, and
+[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
 
 ## Status
 
-Cases 1 and 2 are accepted: the immutable safety profile, source intake,
-uploaded-part verification, byte-exact reconstruction, and ZIP audit all pass
-after recovery. Case 3 has not been accepted. No ROM has been built or flashed.
+Cases 1 through 3 are accepted: source intake and reconstruction are byte-exact,
+the resumable extraction path is verified, and the selected XOS core passes the
+locked capacity and static compatibility audit. Case 4 has not started. Its
+first approval gate is selection of the unified port platform-signing key. No
+ROM has been built or flashed.
