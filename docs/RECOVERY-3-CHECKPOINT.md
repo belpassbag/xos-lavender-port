@@ -31,6 +31,11 @@ Part downloads use `scripts/download-drive-parts.sh`: it takes an uncommitted
 Drive ID map, locks its output directory, skips byte-verified existing parts,
 and atomically publishes each newly downloaded part only after its manifest
 SHA-256 matches.
+The minimum compatibility payload is extracted with
+`scripts/extract-case3-selection.sh`. Selected package directories are staged
+off to the side and renamed into place atomically; individual framework and
+evidence files follow the same rule. Its lock prevents overlapping Case 3
+extraction processes, and it writes a sorted SHA-256 inventory at completion.
 
 ## Locked source identities
 
