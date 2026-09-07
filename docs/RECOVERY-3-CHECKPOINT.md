@@ -27,6 +27,10 @@ large-file stages.
 Case 3 is now split into durable checkpoints. Each checkpoint is tested and
 pushed before another large-file stage starts. At most one regenerable large
 layer may be retained after its consumer has verified the output hash.
+Part downloads use `scripts/download-drive-parts.sh`: it takes an uncommitted
+Drive ID map, locks its output directory, skips byte-verified existing parts,
+and atomically publishes each newly downloaded part only after its manifest
+SHA-256 matches.
 
 ## Locked source identities
 

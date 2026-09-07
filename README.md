@@ -46,6 +46,18 @@ project scope.
    python3 tools/portctl.py assemble donor --parts-dir incoming --output-dir work/sources
    ```
 
+   For a shared Google Drive folder, first create a two-column local ID map
+   (`DRIVE_FILE_ID PART_FILENAME`) from the authenticated folder listing. The
+   downloader resumes at verified part boundaries, uses an exclusive lock, and
+   publishes each part only after its SHA-256 matches:
+
+   ```bash
+   scripts/download-drive-parts.sh SHA256SUMS-parts.txt drive-ids.txt incoming lineage.zip.part-
+   scripts/download-drive-parts.sh SHA256SUMS-parts.txt drive-ids.txt incoming xos.zip.part-
+   ```
+
+   Drive IDs remain runtime inputs and are not committed to this repository.
+
 4. Audit the reconstructed archives and extract only the case-approved payloads:
 
    ```bash
