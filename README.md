@@ -113,6 +113,27 @@ preserved. The completed tree is re-verifiable with `buildctl.py verify-output`.
 Donor vbmeta files are read-only analysis inputs. The locked output policy
 forbids packaging or flashing them on `lavender`.
 
+7. Start the Case 5.1 local recovery from the machine that already holds the
+   two original ZIPs:
+
+   ```bash
+   ./scripts/case5-local.sh start /home/zirex/XOS-Lavender-Port
+   ```
+
+   This starts a detached, single-worker job. It preserves both ZIPs, creates
+   or reuses a persistent project development key outside Git, resumes every
+   accepted Case 4 stage, re-verifies the development root, and captures
+   UID/GID, modes, symlinks, SELinux labels, capabilities, and all other xattrs
+   directly from the source ext4 images. Check it without restarting:
+
+   ```bash
+   ./scripts/case5-local.sh status /home/zirex/XOS-Lavender-Port
+   ```
+
+   The exact execution boundary and generated checkpoint are documented in
+   [docs/CASE-5-1-CHECKPOINT.md](docs/CASE-5-1-CHECKPOINT.md). Repack, recovery
+   ZIP creation, production signing, and flashing remain later gates.
+
 See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
 [docs/MATERIALIZATION.md](docs/MATERIALIZATION.md) for the accepted source
 materialization evidence, [docs/RECOVERY-1.md](docs/RECOVERY-1.md) for the
@@ -124,14 +145,14 @@ accepted compatibility evidence and keep/remove/patch matrix, and
 [docs/CASE-4-CHECKPOINT.md](docs/CASE-4-CHECKPOINT.md) for the Case 4 recovery
 history. The accepted static build evidence and remaining boundary are in
 [docs/CASE-4-REPORT.md](docs/CASE-4-REPORT.md) and
-[docs/CASE-4-EVIDENCE.json](docs/CASE-4-EVIDENCE.json). See
-[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
+[docs/CASE-4-EVIDENCE.json](docs/CASE-4-EVIDENCE.json), and see
+[docs/CASE-5-1-CHECKPOINT.md](docs/CASE-5-1-CHECKPOINT.md) for the durable local
+rebuild and ext4 metadata-capture contract. The complete case-by-case sequence
+is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Status
 
-Cases 1 through 4 are accepted. Source intake/reconstruction is byte-exact, the
-resumable extraction path is verified, and the selected XOS core development
-root passes the locked signing, shared-UID, dependency, capacity, and static
-compatibility gates. Production signing remains deferred until physical boot
-and functional stability. No flashable ROM image has been built or flashed;
-Case 5 has not started.
+Cases 1 through 4 are accepted. Case 5.1 orchestration and metadata capture are
+implemented and pass repository tests; execution against the user's local
+payload is pending. Production signing remains deferred until physical boot
+and functional stability. No flashable ROM image has been built or flashed.
