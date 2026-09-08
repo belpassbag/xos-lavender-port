@@ -1,0 +1,83 @@
+schema_version = 1
+
+[project]
+case = "5.1"
+device = "lavender"
+donor = "Infinix-X6812B"
+android_version = 11
+sdk = 30
+architecture = "arm64"
+mode = "development"
+port_profile_sha256 = "0f784e780af49ebf9d7dd53233bd034c3abc0e9833df2f29fa58fcc3b0ce648a"
+compatibility_profile_sha256 = "03c5553149b49aba127534a96a8420d2a2682590e79c3b40b9fedd43509847bd"
+pipeline_profile_sha256 = "6cffdd3beda43710d71d40e59c08a38c2fcf127c34307353c8b28237d012bf5a"
+
+[local]
+minimum_fresh_free_bytes = 25769803776
+state_schema = "xos-lavender-case5-local-v1"
+report_schema = "xos-lavender-case5-checkpoint-v1"
+background_mode = "detached-session"
+
+[signing]
+mode = "project-development"
+private_key_name = "platform-development.pem"
+certificate_name = "platform-development.der"
+private_directory_mode = "0700"
+private_key_mode = "0600"
+
+[metadata]
+schema = "xos-ext4-metadata-v1"
+capture_all_extended_attributes = true
+required_label_xattr = "security.selinux"
+capability_xattr = "security.capability"
+allowed_file_types = ["directory", "regular", "symlink"]
+
+[[metadata.sources]]
+id = "base_system"
+mode = "snapshot"
+purpose = "system-as-root base, protected paths, and retained shared-UID packages"
+roots = ["/"]
+
+[[metadata.sources]]
+id = "base_vendor"
+mode = "preserve-image"
+purpose = "byte-exact lavender hardware partition"
+roots = []
+
+[[metadata.sources]]
+id = "donor_system"
+mode = "snapshot"
+purpose = "donor TSSI system transplant"
+roots = ["/system"]
+
+[[metadata.sources]]
+id = "donor_product"
+mode = "snapshot"
+purpose = "selected XOS product overlays"
+roots = [
+  "/app/SettingsOverlay",
+  "/app/SystemUIOverlay",
+  "/priv-app/XOSLauncher_res",
+]
+
+[[metadata.sources]]
+id = "donor_system_ext"
+mode = "snapshot"
+purpose = "selected XOS core apps and runtime files"
+roots = [
+  "/apex/com.transsion.kolun.apex",
+  "/app/OSSettingsExt",
+  "/app/XLauncher",
+  "/framework/transsion-res.apk",
+  "/priv-app/TranSettings",
+  "/priv-app/TranSettingsIntelligence",
+  "/priv-app/TranSystemUI",
+]
+
+[guards]
+preserve_source_archives = true
+consume_source_archives = false
+allow_production_key = false
+allow_repack = false
+allow_automatic_flash = false
+require_data_outside_repository = true

@@ -67,9 +67,39 @@ fixes, development-signing result, and the Case 5 boundary are recorded in
 
 ## Case 5 — Repack and static validation
 
+Status: **in progress; Case 5.1 implementation verified, local payload
+execution pending**.
+
+### Case 5.1 — Durable rebuild and source metadata
+
+- Run the exact Case 4 regeneration as a detached, single-worker, resumable
+  local job.
+- Persist one project development key outside Git and record its public
+  identity.
+- Capture UID/GID, modes, symlinks, SELinux labels, capabilities, and all other
+  xattrs directly from the locked source ext4 images.
+- Publish an atomic machine-readable checkpoint without repacking or flashing.
+
+Acceptance: `reports/case5-1-checkpoint.json` passes on the payload-holding
+machine. Tooling and synthetic-ext4 verification are complete; the local
+payload run is still required. See
+[CASE-5-1-CHECKPOINT.md](CASE-5-1-CHECKPOINT.md).
+
+### Case 5.2 — Metadata reconstruction and image repack
+
 - Rebuild the target system image reproducibly within the stock size.
+- Apply source-proven metadata to every final path and verify there are no
+  unmapped entries.
+
+This subcase is blocked until Case 5.1 local acceptance.
+
+### Case 5.3 — Recovery test package
+
 - Generate a recovery-installable test package from the Lineage base layout.
 - Retain target boot/vendor and target-compatible AVB handling.
+
+### Case 5.4 — Artifact validation
+
 - Run ZIP, image, path, architecture, policy, and checksum validation.
 
 Acceptance: a versioned test artifact and verification report pass locally.
