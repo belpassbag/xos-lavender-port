@@ -70,6 +70,19 @@ project scope.
 Extraction is atomic, validates ZIP paths and expected entry sizes, and never
 extracts donor boot/DTBO/preloader/modem images.
 
+Case 4 source recovery can resume direct Drive downloads and materialize base
+and donor images in separate disk-bounded stages:
+
+```bash
+scripts/download-drive-file.sh DRIVE_ID EXPECTED_BYTES EXPECTED_SHA256 /absolute/work/source.zip
+scripts/materialize-case4-images.sh base /absolute/work/base.zip /absolute/work --consume-source
+scripts/materialize-case4-images.sh donor /absolute/work/donor.zip /absolute/work --consume-source
+```
+
+Only a downloaded source located inside the selected work root can be consumed.
+Every image must pass its locked identity and read-only filesystem check before
+the next regenerable layer is pruned.
+
 Donor vbmeta files are read-only analysis inputs. The locked output policy
 forbids packaging or flashing them on `lavender`.
 

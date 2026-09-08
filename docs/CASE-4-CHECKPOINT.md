@@ -1,6 +1,7 @@
 # Case 4 — XOS core pipeline checkpoint
 
-Status: **in progress from `main` commit `cd8b63b`; Case 4.1 contract implemented**.
+Status: **in progress from `main` commit `cd8b63b`; Case 4.1 is complete and
+the Case 4.2 materialization recovery is implemented**.
 
 This is the durable restart point for the XOS core port pipeline. Case 3 is
 closed and must not be repeated. Proprietary inputs and generated trees remain
@@ -62,10 +63,32 @@ The 35,720,630-byte audit bundle also passed its outer SHA-256
 and all 21 inner checksums. A tar ownership warning was isolated to host UID/GID
 metadata; file bytes were independently verified.
 
+## ENOSPC recovery
+
+The first five-image rematerialization attempt verified the base system and
+vendor images, then stopped safely while extracting donor logical partitions
+because the temporary filesystem reached 100% use. Atomic output publication
+prevented a partial donor image from being accepted. The large temporary layer
+was reclaimed after its verified or regenerable role was identified; no source
+identity or accepted Case 3 evidence changed.
+
+Two committed scripts now make that boundary repeatable:
+
+- `download-drive-file.sh` resumes a direct Drive ZIP at its existing byte
+  offset and publishes it only after exact size and SHA-256 verification;
+- `materialize-case4-images.sh` handles base and donor separately, verifies
+  each image by its locked Case 3 ID, runs read-only `e2fsck`, and removes only
+  the exact intermediate source layer after all dependent outputs pass.
+
+The donor partitions are extracted one at a time, so a later run reuses each
+already verified image rather than restarting all three. Full five-image
+verification atomically writes `reports/generated/images.json`.
+
 ## Exact restart boundary
 
-1. Case 4.1 profile, input inspector, and safety tests: implemented locally.
-2. Reconstruct the five exact filesystem images and extract Case 4 roots.
+1. Case 4.1 profile, input inspector, and safety tests: committed and verified.
+2. Disk-bounded, resumable five-image recovery tooling: committed and verified;
+   run it against the locked Drive sources, then extract Case 4 roots.
 3. Run `buildctl.py inspect-inputs` and resolve only measured pipeline drift.
 4. Implement and test resumable staging, patching, development signing, and
    output verification.
