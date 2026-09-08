@@ -83,6 +83,33 @@ Only a downloaded source located inside the selected work root can be consumed.
 Every image must pass its locked identity and read-only filesystem check before
 the next regenerable layer is pruned.
 
+5. Extract/reuse the two full roots plus the minimum audited selection, then
+   run the exact Case 4 input gate:
+
+   ```bash
+   scripts/extract-case4-roots.sh /absolute/image-work /absolute/case4-work
+   ```
+
+6. Create a project-specific development key outside this repository and build
+   the resumable development root:
+
+   ```bash
+   python3 tools/buildctl.py init-dev-key --key-dir /absolute/private-key-dir
+   python3 tools/buildctl.py build \
+     --base-root /absolute/case4-work/roots/base \
+     --donor-system-root /absolute/case4-work/roots/donor-system \
+     --donor-product-root /absolute/case4-work/selection/donor/product \
+     --donor-system-ext-root /absolute/case4-work/selection/donor/system_ext \
+     --output-root /absolute/case4-work/output/dev-root \
+     --development-key /absolute/private-key-dir/platform-development.pem \
+     --development-cert /absolute/private-key-dir/platform-development.der \
+     --report /absolute/case4-work/reports/output.json
+   ```
+
+The private key must remain mode `0600` and outside Git. Platform-domain APKs
+are signed with APK Signature Scheme v2; standalone APK and APEX signatures are
+preserved. The completed tree is re-verifiable with `buildctl.py verify-output`.
+
 Donor vbmeta files are read-only analysis inputs. The locked output policy
 forbids packaging or flashing them on `lavender`.
 
@@ -94,14 +121,17 @@ full source revalidation,
 [docs/RECOVERY-3-CHECKPOINT.md](docs/RECOVERY-3-CHECKPOINT.md) for the durable
 Case 3 restart point, [docs/CASE-3-REPORT.md](docs/CASE-3-REPORT.md) for the
 accepted compatibility evidence and keep/remove/patch matrix, and
-[docs/CASE-4-CHECKPOINT.md](docs/CASE-4-CHECKPOINT.md) for the active XOS core
-pipeline boundary. See [docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case
-execution plan.
+[docs/CASE-4-CHECKPOINT.md](docs/CASE-4-CHECKPOINT.md) for the Case 4 recovery
+history. The accepted static build evidence and remaining boundary are in
+[docs/CASE-4-REPORT.md](docs/CASE-4-REPORT.md) and
+[docs/CASE-4-EVIDENCE.json](docs/CASE-4-EVIDENCE.json). See
+[docs/ROADMAP.md](docs/ROADMAP.md) for the case-by-case execution plan.
 
 ## Status
 
-Cases 1 through 3 are accepted: source intake and reconstruction are byte-exact,
-the resumable extraction path is verified, and the selected XOS core passes the
-locked capacity and static compatibility audit. Case 4 is in progress using the
-approved project development-signing strategy; production signing remains
-deferred until the ROM is stable. No ROM has been built or flashed.
+Cases 1 through 4 are accepted. Source intake/reconstruction is byte-exact, the
+resumable extraction path is verified, and the selected XOS core development
+root passes the locked signing, shared-UID, dependency, capacity, and static
+compatibility gates. Production signing remains deferred until physical boot
+and functional stability. No flashable ROM image has been built or flashed;
+Case 5 has not started.

@@ -1,0 +1,84 @@
+{
+  "case": 4,
+  "date": "2026-09-08",
+  "input": {
+    "apks_scanned": 311,
+    "base_system": {
+      "sha256": "3536fa28745278ecbd38cc0a0f09329a1c19cf1f959aeb189ee71c1c9f904501",
+      "size": 3640619008
+    },
+    "base_vendor": {
+      "sha256": "967a4b560b774e869a5ce16f6b5ee6b73dedfdfde7fa4ef641b3b9cdce4f8f60",
+      "size": 2080305152
+    },
+    "classpath_providers": 9,
+    "donor_product": {
+      "sha256": "a3e760d683423b419f2b859fbf3ac24cfd41276939291e819cbeb05e9db6fcbb",
+      "size": 3206438912
+    },
+    "donor_system": {
+      "sha256": "2fb5bf44091b6ddd9d63799351c38f75c26499809f6db832e24ced3f5700313d",
+      "size": 1121648640
+    },
+    "donor_system_ext": {
+      "sha256": "7de9ac35bd7c51e683b86546278e2c630024e9f8c9a01c9d4b99f1836324b002",
+      "size": 1706311680
+    },
+    "identity_sha256": "a76a7e5aec6f13ed7123fe54af37e37c007277359ae8bf61e37ece0bc1f063ea",
+    "protected_base_paths": 9,
+    "runtime_dependencies": 3,
+    "selected_packages": 8
+  },
+  "output": {
+    "apk_inventory": {
+      "cross_directory_duplicate_packages": 0,
+      "development_signed": 90,
+      "mixed_shared_uid_groups": 0,
+      "preserved_standalone": 137,
+      "shared_uid_groups": 11,
+      "total": 227,
+      "zip_failures": 0
+    },
+    "development_certificate_sha256": "afd733ea357012987f9d4e70d6a425f15027fe2b424906a879a1399f624826c1",
+    "preopt_residue": 0,
+    "regular_bytes": 1761769184,
+    "regular_files": 3089,
+    "symbolic_links": 262,
+    "tree_manifest_sha256": "a7129dee724a75058617087dca2b688f348e06af452b593f64df33c563a13c0b"
+  },
+  "patches": {
+    "mac_permissions_sha256": "1437fdbdda068632626df347e2f735c7ce5681e9ac3c5c653594367bc92563be",
+    "privapp_permissions_sha256": "1ae6e5b3f6846536ac5fa312cbeee2fb6b94aace34bb6fa0b448410674d89439",
+    "service_contexts_sha256": "a0007a02a4faeeadbe3db3d72f679ed98990e6928eb1ea7e1f6804ef5438888f"
+  },
+  "preserved_runtime": {
+    "kolun_apex_sha256": "e97e6533e4423a7062f18c52f26a593d2dc24e365ceefcfd07dbd5f3ca684ab9",
+    "os_framework_apex_sha256": "a2b648e722552065cd2e06ee9a90c6796384f6154bcdbd5ed1af5ca611a46cc9"
+  },
+  "schema_version": 1,
+  "selected_output_sha256": {
+    "OSSettingsExt": "4ec84df888279569b98ce9cfc5db080481e80bde09411239b4bfd3ae2d38c478",
+    "SettingsOverlay": "bb9e6f4bf53b720e2dead85f31a8d113ca4e606bd9617119b23754ac8d3fa581",
+    "SystemUIOverlay": "101055b31a422a4463f1a353729c147606fa97f3ab2d1f2d7d79eacfa700205e",
+    "TranSettings": "e44483b30a0726606407c354a7409997dfe377574d10ba5253a9247669289451",
+    "TranSettingsIntelligence": "d5cb1bc537223c32ba277bec726ab1102299a8d72f80e1409048ad0a9b858bbd",
+    "TranSystemUI": "2bd3d1201daae3e0f167082ba8ffde5837ee6a2685106704099160e9cfa3a6aa",
+    "XLauncher": "220b345611e97833068efbe48f88e79e5ab276f744a1cd88bf8683018816b02a",
+    "XOSLauncher_res": "aff40047341f27e6f554881ab34ec47962ece3ed3a614249822c2d47fe011310",
+    "transsion_resources": "d2884d9c688bb99fa5bfd3bb4ae150970f74d9108a0bd88df04f3b4419805835"
+  },
+  "static_compatibility": {
+    "selinux_markers_sha256": {
+      "plat": "23f3b45bb1932c664d94cf157f2a9cda8d6415321383b97cd59da17321e80e9c",
+      "product": "5e7d483f16bc3b339e9dc63ce0a0f4a35263ee48e340bafe47fb10464368f653",
+      "system_ext": "d2a9ddfc73981f04a363623b1ade22849abf9288cf94118c6ebb13c8d5ba4f7f"
+    },
+    "vintf_level_3_sha256": "67edd789de4bd35d47e14c2365de082b9ee64ade0c1ca77e2842f3a2015af8b5"
+  },
+  "status": "accepted-static",
+  "tests": {
+    "repository_unit_tests": 59,
+    "transformed_apk_content_digest_failures": 0,
+    "transformed_apk_signature_failures": 0
+  }
+}

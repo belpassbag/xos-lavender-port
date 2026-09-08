@@ -152,5 +152,110 @@ class InputSafetyTests(unittest.TestCase):
                 buildctl._atomic_report(report_path, {"status": "unsafe"})
 
 
+class OutputPipelineTests(unittest.TestCase):
+    def profiles(self) -> tuple[dict, dict, dict, dict]:
+        return buildctl.load_and_validate()
+
+    def test_generates_only_locked_systemui_privileged_grants(self) -> None:
+        profile, _compatibility, _port, _summary = self.profiles()
+        document = buildctl.ElementTree.fromstring(buildctl._permission_document(profile))
+        group = document.find("privapp-permissions")
+        self.assertIsNotNone(group)
+        assert group is not None
+        self.assertEqual(group.get("package"), "com.android.systemui")
+        self.assertEqual(
+            sorted(item.get("name") for item in group.findall("permission")),
+            sorted(profile["permissions"]["required_grants"]),
+        )
+
+    def test_service_context_patch_is_idempotent_and_rejects_conflict(self) -> None:
+        profile, compatibility, _port, _summary = self.profiles()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            path = root / "system" / "system_ext" / "etc" / "selinux" / "system_ext_service_contexts"
+            path.parent.mkdir(parents=True)
+            path.write_text("gamemode_helper u:object_r:activity_service:s0\n", encoding="utf-8")
+            first = buildctl._patch_service_contexts(profile, compatibility, root)
+            second = buildctl._patch_service_contexts(profile, compatibility, root)
+            self.assertEqual(first["added"], 8)
+            self.assertEqual(second["added"], 0)
+            self.assertEqual(len(buildctl._service_context_map(path)), 9)
+            path.write_text("gamemode_helper u:object_r:wrong_type:s0\n", encoding="utf-8")
+            with self.assertRaisesRegex(buildctl.BuildError, "drift"):
+                buildctl._patch_service_contexts(profile, compatibility, root)
+
+    def test_preopt_cleanup_removes_regular_and_symbolic_link_residue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            regular = root / "system" / "app" / "One" / "oat" / "arm64" / "One.odex"
+            regular.parent.mkdir(parents=True)
+            regular.write_bytes(b"preopt")
+            linked = root / "system" / "app" / "Two" / "Two.vdex"
+            linked.parent.mkdir(parents=True)
+            linked.symlink_to("missing.vdex")
+            linked_oat = root / "system" / "app" / "Three" / "oat"
+            linked_oat.parent.mkdir(parents=True)
+            linked_oat.symlink_to("missing-oat", target_is_directory=True)
+            report = buildctl._cleanup_preopt(root)
+            self.assertGreaterEqual(report["removed_entries"], 3)
+            self.assertEqual(report["removed_regular_files"], 1)
+            self.assertEqual(report["removed_regular_bytes"], 6)
+            self.assertEqual(buildctl._preopt_residue(root), [])
+
+    def test_duplicate_package_guard_allows_splits_only_in_one_directory(self) -> None:
+        rows = [
+            {"package": "com.example.split", "directory": "/system/app/Split"},
+            {"package": "com.example.split", "directory": "/system/app/Split"},
+            {"package": "com.example.duplicate", "directory": "/system/app/One"},
+            {"package": "com.example.duplicate", "directory": "/system/priv-app/Two"},
+        ]
+        self.assertEqual(
+            buildctl._cross_directory_duplicates(rows),
+            {"com.example.duplicate": ["/system/app/One", "/system/priv-app/Two"]},
+        )
+
+    def test_locked_launcher_removal_requires_exact_identity(self) -> None:
+        expected = buildctl.LOCKED_REMOVALS[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            apk = root.joinpath(*Path(expected["path"]).parts[1:])
+            apk.parent.mkdir(parents=True)
+            apk.write_bytes(b"fixture")
+            report = {
+                "sha256": expected["sha256"],
+                "certificate_sha256": expected["certificate_sha256"],
+                "package": expected["package"],
+            }
+            with mock.patch.object(buildctl.compatctl, "apk_report", return_value=report):
+                self.assertEqual(buildctl._remove_locked_duplicates(root), [expected])
+            self.assertFalse(apk.parent.exists())
+            apk.parent.mkdir(parents=True)
+            apk.write_bytes(b"drift")
+            with mock.patch.object(
+                buildctl.compatctl,
+                "apk_report",
+                return_value={**report, "sha256": "0" * 64},
+            ):
+                with self.assertRaisesRegex(buildctl.BuildError, "identity drift"):
+                    buildctl._remove_locked_duplicates(root)
+
+    def test_tree_manifest_is_deterministic_and_content_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            file_path = root / "system" / "framework" / "fixture.jar"
+            file_path.parent.mkdir(parents=True)
+            file_path.write_bytes(b"one")
+            link = root / "system" / "bin" / "fixture"
+            link.parent.mkdir(parents=True)
+            link.symlink_to("../framework/fixture.jar")
+            first = buildctl._tree_manifest(root)
+            second = buildctl._tree_manifest(root)
+            self.assertEqual(first, second)
+            self.assertEqual(first["regular_files"], 1)
+            self.assertEqual(first["symbolic_links"], 1)
+            file_path.write_bytes(b"two")
+            self.assertNotEqual(first["sha256"], buildctl._tree_manifest(root)["sha256"])
+
+
 if __name__ == "__main__":
     unittest.main()

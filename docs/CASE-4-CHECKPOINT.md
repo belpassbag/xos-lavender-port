@@ -1,11 +1,13 @@
 # Case 4 — XOS core pipeline checkpoint
 
-Status: **in progress from `main` commit `cd8b63b`; Case 4 input recovery and
-inspection are complete, and staging/patch/signing implementation is next**.
+Status: **superseded by the accepted Case 4 report on 2026-09-08**.
 
-This is the durable restart point for the XOS core port pipeline. Case 3 is
-closed and must not be repeated. Proprietary inputs and generated trees remain
-outside Git.
+This document preserves the input-recovery history. Case 3 is closed and must
+not be repeated. Case 4 staging, patching, development signing, and static
+verification are complete; the final measured result is recorded in
+[`CASE-4-REPORT.md`](CASE-4-REPORT.md) and
+[`CASE-4-EVIDENCE.json`](CASE-4-EVIDENCE.json). Proprietary inputs, generated
+trees, and private keys remain outside Git.
 
 ## Approved signing sequence
 
@@ -116,9 +118,9 @@ paths present.
 2. Disk-bounded, resumable five-image recovery: complete and verified.
 3. Real root extraction and `inspect-inputs`: complete; the sole measured path
    drift is corrected and all input contracts pass.
-4. Implement and test resumable staging, patching, development signing, and
-   output verification.
-5. Generate and verify the real development root tree.
-6. Publish the final Case 4 report, run complete CI, and merge.
+4. Resumable staging, patching, development signing, and output verification:
+   complete.
+5. Real development root generation and static verification: complete.
+6. Final Case 4 report and machine-readable evidence: complete.
 
-Do not start Case 5 or produce a flashable package until all Case 4 gates pass.
+The next permitted scope is Case 5. No flashable package was produced in Case 4.
