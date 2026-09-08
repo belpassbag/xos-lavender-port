@@ -23,7 +23,7 @@ protected_base_paths = [
   "/system/etc/vintf",
   "/system/etc/selinux",
   "/system/etc/permissions",
-  "/system/etc/security/mac_permissions.xml",
+  "/system/etc/selinux/plat_mac_permissions.xml",
   "/system/framework/org.ifaa.android.manager.jar",
   "/system/framework/telephony-ext.jar",
 ]

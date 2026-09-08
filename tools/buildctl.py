@@ -24,7 +24,7 @@ REPOSITORY_ROOT = TOOLS_DIRECTORY.parent
 DEFAULT_PROFILE = REPOSITORY_ROOT / "config" / "pipeline.toml"
 DEFAULT_COMPATIBILITY_PROFILE = REPOSITORY_ROOT / "config" / "compatibility.toml"
 DEFAULT_PORT_PROFILE = REPOSITORY_ROOT / "config" / "port.toml"
-LOCKED_PIPELINE_SHA256 = "f201f95e3b96f63af785b6782178311b3af1ad6155b163a41b865e94bb3c2f9f"
+LOCKED_PIPELINE_SHA256 = "6cffdd3beda43710d71d40e59c08a38c2fcf127c34307353c8b28237d012bf5a"
 
 
 class BuildError(RuntimeError):
@@ -103,7 +103,7 @@ def validate_profile(profile: dict, compatibility: dict, port: dict, enforce_loc
         "/system/etc/vintf",
         "/system/etc/selinux",
         "/system/etc/permissions",
-        "/system/etc/security/mac_permissions.xml",
+        "/system/etc/selinux/plat_mac_permissions.xml",
         "/system/framework/org.ifaa.android.manager.jar",
         "/system/framework/telephony-ext.jar",
     }

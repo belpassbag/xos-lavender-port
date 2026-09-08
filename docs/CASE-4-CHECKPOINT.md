@@ -1,7 +1,7 @@
 # Case 4 — XOS core pipeline checkpoint
 
-Status: **in progress from `main` commit `cd8b63b`; Case 4.1 is complete and
-the Case 4.2 materialization recovery is implemented**.
+Status: **in progress from `main` commit `cd8b63b`; Case 4 input recovery and
+inspection are complete, and staging/patch/signing implementation is next**.
 
 This is the durable restart point for the XOS core port pipeline. Case 3 is
 closed and must not be repeated. Proprietary inputs and generated trees remain
@@ -84,12 +84,38 @@ The donor partitions are extracted one at a time, so a later run reuses each
 already verified image rather than restarting all three. Full five-image
 verification atomically writes `reports/generated/images.json`.
 
+## Recovered image and input gate
+
+All five outputs now match the locked Case 3 size and SHA-256 contracts and
+pass read-only `e2fsck`:
+
+| Image | Bytes | SHA-256 |
+|---|---:|---|
+| `base_system` | 3,640,619,008 | `3536fa28745278ecbd38cc0a0f09329a1c19cf1f959aeb189ee71c1c9f904501` |
+| `base_vendor` | 2,080,305,152 | `967a4b560b774e869a5ce16f6b5ee6b73dedfdfde7fa4ef641b3b9cdce4f8f60` |
+| `donor_system` | 1,121,648,640 | `2fb5bf44091b6ddd9d63799351c38f75c26499809f6db832e24ced3f5700313d` |
+| `donor_product` | 3,206,438,912 | `a3e760d683423b419f2b859fbf3ac24cfd41276939291e819cbeb05e9db6fcbb` |
+| `donor_system_ext` | 1,706,311,680 | `7de9ac35bd7c51e683b86546278e2c630024e9f8c9a01c9d4b99f1836324b002` |
+
+The base and donor system roots were extracted once. Product and system-ext
+use the already audited Case 3 minimum selection instead of duplicating both
+full partitions. The selection contains 481 files and 350,727,209 bytes.
+
+The first real `inspect-inputs` run exposed one contract drift: Android 11 uses
+`/system/etc/selinux/plat_mac_permissions.xml`, while the initial Case 4
+profile named the nonexistent legacy path
+`/system/etc/security/mac_permissions.xml`. The profile and its lock now use
+the source-proven Android 11 path. After that correction, the input gate passed
+with 311 APKs inventoried, eight exact selected packages, three exact runtime
+dependencies, nine exact classpath providers, and all nine protected base
+paths present.
+
 ## Exact restart boundary
 
 1. Case 4.1 profile, input inspector, and safety tests: committed and verified.
-2. Disk-bounded, resumable five-image recovery tooling: committed and verified;
-   run it against the locked Drive sources, then extract Case 4 roots.
-3. Run `buildctl.py inspect-inputs` and resolve only measured pipeline drift.
+2. Disk-bounded, resumable five-image recovery: complete and verified.
+3. Real root extraction and `inspect-inputs`: complete; the sole measured path
+   drift is corrected and all input contracts pass.
 4. Implement and test resumable staging, patching, development signing, and
    output verification.
 5. Generate and verify the real development root tree.

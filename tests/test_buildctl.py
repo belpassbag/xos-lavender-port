@@ -36,6 +36,10 @@ class PipelineProfileTests(unittest.TestCase):
         self.assertEqual(summary["permission_grants"], 3)
         self.assertEqual(summary["service_mappings"], 9)
         self.assertEqual(summary["signing_mode"], "project-development")
+        self.assertIn(
+            "/system/etc/selinux/plat_mac_permissions.xml",
+            profile["layout"]["protected_base_paths"],
+        )
 
     def test_rejects_pipeline_policy_mutations(self) -> None:
         profile, compatibility, port = self.load()
