@@ -12,10 +12,16 @@ cache/
 # Generated reports
 reports/generated/
 
+# Local development and release signing material
+keys/
+*.jks
+*.keystore
+*.pk8
+*.pem
+
 # Python/editor noise
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .idea/
 .vscode/
-

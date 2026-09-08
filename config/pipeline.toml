@@ -1,0 +1,96 @@
+schema_version = 1
+
+[project]
+device = "lavender"
+donor = "Infinix-X6812B"
+android_version = 11
+sdk = 30
+architecture = "arm64"
+mode = "development"
+compatibility_profile_sha256 = "03c5553149b49aba127534a96a8420d2a2682590e79c3b40b9fedd43509847bd"
+
+[layout]
+base_root = "/"
+donor_system_source = "/system"
+output_system = "/system"
+output_product = "/system/product"
+output_system_ext = "/system/system_ext"
+strategy = "donor-system-on-base-system-as-root"
+protected_base_paths = [
+  "/system/product",
+  "/system/system_ext",
+  "/system/etc/init",
+  "/system/etc/vintf",
+  "/system/etc/selinux",
+  "/system/etc/permissions",
+  "/system/etc/selinux/plat_mac_permissions.xml",
+  "/system/framework/org.ifaa.android.manager.jar",
+  "/system/framework/telephony-ext.jar",
+]
+
+[packages]
+retain_base_shared_uids = [
+  "android.uid.bluetooth",
+  "android.uid.phone",
+]
+replace_package_names = [
+  "com.android.settings",
+  "com.android.settings.intelligence",
+  "com.android.systemui",
+]
+product_paths = [
+  "/product/app/SystemUIOverlay",
+  "/product/app/SettingsOverlay",
+  "/product/priv-app/XOSLauncher_res",
+]
+system_ext_paths = [
+  "/system_ext/priv-app/TranSystemUI",
+  "/system_ext/priv-app/TranSettings",
+  "/system_ext/priv-app/TranSettingsIntelligence",
+  "/system_ext/app/XLauncher",
+  "/system_ext/app/OSSettingsExt",
+]
+
+[cleanup]
+directory_names = ["oat"]
+file_suffixes = [".art", ".odex", ".vdex"]
+discard_all_preopt = true
+
+[permissions]
+package = "com.android.systemui"
+destination_partition = "system_ext"
+required_grants = [
+  "android.permission.KILL_UID",
+  "android.permission.READ_PHONE_STATE",
+  "android.permission.SEND_SMS",
+]
+copy_donor_privapp_file = false
+
+[selinux]
+preserve_base_policy = true
+allow_new_types = false
+service_contexts_destination = "/system/system_ext/etc/selinux/system_ext_service_contexts"
+
+[signing]
+mode = "project-development"
+strategy = "unified-port-platform-signing"
+resign_certificate_sha256 = [
+  "59988fff31e2f85fbaddc5b37704be97d1c5b7db72a4fb2ed5f07b58ccf20ccf",
+  "a2f1535b2e2e6b707412f8732a08d7911c0cb7b81d061504eba75da32ca3492f",
+]
+preserve_standalone_apks = true
+preserve_apex = true
+update_mac_permissions = true
+require_one_certificate_per_shared_uid = true
+allow_public_aosp_testkey = false
+allow_production_key = false
+commit_private_key = false
+clean_data_required_for_device_test = true
+
+[guards]
+forbid_donor_hardware_images = true
+forbid_donor_vendor_tree = true
+forbid_shared_uid_removal = true
+forbid_package_manager_signature_bypass = true
+forbid_repartition = true
+forbid_automatic_flash = true

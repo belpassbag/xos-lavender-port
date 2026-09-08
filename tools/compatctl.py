@@ -1184,6 +1184,19 @@ def command_verify_images(profile: dict, _port: dict, summary: dict, args: argpa
     print(json.dumps(report, indent=2, sort_keys=True))
 
 
+def command_verify_image(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
+    images = _unique_table(profile["images"], "id", "image")
+    _require(args.id in images, f"unknown image ID: {args.id}")
+    report = {
+        "status": "verified",
+        "profile_sha256": summary["profile_sha256"],
+        "image": verify_image(args.image, images[args.id]),
+    }
+    if args.report:
+        _atomic_report(args.report, report)
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
 def command_verify_selection(profile: dict, _port: dict, summary: dict, args: argparse.Namespace) -> None:
     roots = {"system": args.system_root, "product": args.product_root, "system_ext": args.system_ext_root}
     expected_packages = _unique_table(profile["packages"], "id", "package")
@@ -1508,6 +1521,14 @@ def build_parser() -> argparse.ArgumentParser:
     image_parser.add_argument("--donor-system-ext", type=Path, required=True)
     image_parser.add_argument("--report", type=Path)
     image_parser.set_defaults(handler=command_verify_images)
+
+    single_image_parser = subparsers.add_parser(
+        "verify-image", help="verify one recovered ext filesystem by locked ID"
+    )
+    single_image_parser.add_argument("--id", required=True)
+    single_image_parser.add_argument("--image", type=Path, required=True)
+    single_image_parser.add_argument("--report", type=Path)
+    single_image_parser.set_defaults(handler=command_verify_image)
 
     selection_parser = subparsers.add_parser("verify-selection", help="verify selected APKs and runtime files")
     selection_parser.add_argument("--system-root", type=Path, required=True)

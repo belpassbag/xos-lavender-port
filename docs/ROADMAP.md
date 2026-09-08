@@ -49,7 +49,7 @@ recorded in [CASE-3-REPORT.md](CASE-3-REPORT.md).
 
 ## Case 4 — XOS Core port pipeline
 
-Status: **not started; signing-key selection is the next approval gate**.
+Status: **accepted for static development on 2026-09-08**.
 
 - Preserve the Lineage system-as-root bootstrap and Qualcomm hardware stack.
 - Transplant the donor TSSI framework and selected XOS core components.
@@ -58,6 +58,12 @@ Status: **not started; signing-key selection is the next approval gate**.
   labels with the smallest verified change set.
 
 Acceptance: the generated root tree passes policy, dependency, and size checks.
+
+The recovery history is recorded in
+[CASE-4-CHECKPOINT.md](CASE-4-CHECKPOINT.md). Final measured evidence, drift
+fixes, development-signing result, and the Case 5 boundary are recorded in
+[CASE-4-REPORT.md](CASE-4-REPORT.md) and
+[CASE-4-EVIDENCE.json](CASE-4-EVIDENCE.json).
 
 ## Case 5 — Repack and static validation
 

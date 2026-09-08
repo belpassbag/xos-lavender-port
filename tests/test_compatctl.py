@@ -4,10 +4,12 @@ from copy import deepcopy
 import gzip
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 import struct
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zipfile
 
 
@@ -280,6 +282,24 @@ class CompatibilityProfileTests(unittest.TestCase):
                 mutation(candidate)
                 with self.assertRaises(compatctl.CompatibilityError):
                     compatctl.validate_profile(candidate, port, enforce_lock=False)
+
+    def test_verifies_one_image_by_locked_identifier(self) -> None:
+        profile, port = self.load()
+        summary = compatctl.validate_profile(profile, port)
+        expected = next(row for row in profile["images"] if row["id"] == "base_system")
+        verified = {"id": "base_system", "status": "verified"}
+        args = SimpleNamespace(id="base_system", image=Path("fixture.img"), report=None)
+        with mock.patch.object(compatctl, "verify_image", return_value=verified) as verifier:
+            with mock.patch("builtins.print"):
+                compatctl.command_verify_image(profile, port, summary, args)
+        verifier.assert_called_once_with(Path("fixture.img"), expected)
+
+    def test_rejects_unknown_single_image_identifier(self) -> None:
+        profile, port = self.load()
+        summary = compatctl.validate_profile(profile, port)
+        args = SimpleNamespace(id="unexpected", image=Path("fixture.img"), report=None)
+        with self.assertRaisesRegex(compatctl.CompatibilityError, "unknown image ID"):
+            compatctl.command_verify_image(profile, port, summary, args)
 
     def test_rejects_any_locked_profile_byte_semantic_change(self) -> None:
         profile, port = self.load()
