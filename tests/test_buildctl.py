@@ -214,6 +214,93 @@ class OutputPipelineTests(unittest.TestCase):
             {"com.example.duplicate": ["/system/app/One", "/system/priv-app/Two"]},
         )
 
+    def test_replacement_cleanup_removes_only_locked_package_directories(self) -> None:
+        profile, compatibility, _port, _summary = self.profiles()
+        targets = profile["packages"]["replace_package_names"]
+        directories = [
+            "/system/priv-app/BaseSettings",
+            "/system/product/priv-app/BaseSettingsIntelligence",
+            "/system/system_ext/priv-app/BaseSystemUI",
+        ]
+        rows = []
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for index, (package, directory) in enumerate(zip(targets, directories, strict=True)):
+                apk = root.joinpath(*Path(directory).parts[1:]) / f"Base{index}.apk"
+                apk.parent.mkdir(parents=True)
+                apk.write_bytes(b"replace")
+                rows.append(
+                    {
+                        "path": "/" + apk.relative_to(root).as_posix(),
+                        "directory": directory,
+                        "package": package,
+                        "sha256": str(index) * 64,
+                        "certificate_sha256": str(index + 1) * 64,
+                    }
+                )
+            kept = root / "system" / "app" / "Keep" / "Keep.apk"
+            kept.parent.mkdir(parents=True)
+            kept.write_bytes(b"keep")
+            rows.append(
+                {
+                    "path": "/system/app/Keep/Keep.apk",
+                    "directory": "/system/app/Keep",
+                    "package": "com.example.keep",
+                    "sha256": "a" * 64,
+                    "certificate_sha256": "b" * 64,
+                }
+            )
+
+            with mock.patch.object(buildctl, "_apk_rows", return_value=rows):
+                report = buildctl._remove_replaced_packages(profile, root)
+
+            self.assertEqual({row["package"] for row in report}, set(targets))
+            self.assertTrue(kept.exists())
+            for directory in directories:
+                self.assertFalse(root.joinpath(*Path(directory).parts[1:]).exists())
+
+            expected = buildctl._selected_replacement_directories(profile, compatibility)
+            replacement_rows = [
+                {"package": package, "directory": directory}
+                for package, directory in expected.items()
+            ]
+            self.assertEqual(
+                buildctl._verify_replacement_outputs(profile, compatibility, replacement_rows),
+                [
+                    {"package": package, "directory": expected[package]}
+                    for package in sorted(expected)
+                ],
+            )
+
+    def test_replacement_cleanup_rejects_collateral_package_directory(self) -> None:
+        profile, _compatibility, _port, _summary = self.profiles()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            directory = root / "system" / "priv-app" / "Mixed"
+            directory.mkdir(parents=True)
+            fixture = directory / "fixture"
+            fixture.write_bytes(b"preserve-on-error")
+            rows = [
+                {
+                    "path": "/system/priv-app/Mixed/Settings.apk",
+                    "directory": "/system/priv-app/Mixed",
+                    "package": "com.android.settings",
+                    "sha256": "1" * 64,
+                    "certificate_sha256": "2" * 64,
+                },
+                {
+                    "path": "/system/priv-app/Mixed/nested/Other.apk",
+                    "directory": "/system/priv-app/Mixed/nested",
+                    "package": "com.example.other",
+                    "sha256": "3" * 64,
+                    "certificate_sha256": "4" * 64,
+                },
+            ]
+            with mock.patch.object(buildctl, "_apk_rows", return_value=rows):
+                with self.assertRaisesRegex(buildctl.BuildError, "collateral"):
+                    buildctl._remove_replaced_packages(profile, root)
+            self.assertTrue(fixture.exists())
+
     def test_locked_launcher_removal_requires_exact_identity(self) -> None:
         expected = buildctl.LOCKED_REMOVALS[0]
         with tempfile.TemporaryDirectory() as temporary:
