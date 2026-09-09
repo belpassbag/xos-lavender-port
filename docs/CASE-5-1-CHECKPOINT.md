@@ -115,6 +115,15 @@ donor destination. A failed `development_root` remains resumable: the inner
 Case 4 stage is reconstructed from its last atomic boundary while the five
 already completed Case 5.1 stages are reused.
 
+The next retry exposed a path-namespace collision in the shared APK inventory:
+the absolute host path returned by the APK parser overwrote the intended
+logical Android path. Replacement cleanup therefore found its package by
+logical directory but could not associate the same row by path. The inventory
+now validates the parser's host path and then publishes only normalized logical
+paths to transplant, signing, and output verification. A regression test locks
+that boundary. The default status view also retains 60 log lines so a child
+process error remains visible alongside the wrapper traceback.
+
 ## Local acceptance output
 
 A successful run ends with:
@@ -128,7 +137,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 76 tests.
+repository check runs 78 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed

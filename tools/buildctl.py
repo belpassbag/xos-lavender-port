@@ -499,11 +499,13 @@ def _apk_rows(root: Path) -> list[dict]:
                 report = compatctl.apk_report(path)
             except compatctl.CompatibilityError as exc:
                 raise BuildError(f"cannot inspect APK {path}: {exc}") from exc
+            reported_path = report.pop("path", None)
+            _require(reported_path == str(path), f"APK report path drift: {path}")
             rows.append(
                 {
+                    **report,
                     "path": "/" + path.relative_to(root).as_posix(),
                     "directory": "/" + path.parent.relative_to(root).as_posix(),
-                    **report,
                 }
             )
     return rows
