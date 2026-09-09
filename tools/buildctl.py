@@ -36,6 +36,14 @@ LOCKED_PIPELINE_SHA256 = "6cffdd3beda43710d71d40e59c08a38c2fcf127c34307353c8b282
 DEVELOPMENT_KEY_NAME = "platform-development.pem"
 DEVELOPMENT_CERTIFICATE_NAME = "platform-development.der"
 PRIVAPP_OUTPUT_PATH = "/system/system_ext/etc/permissions/privapp-permissions-xos-lavender.xml"
+REPLACEMENT_DIRECTORY_PREFIXES = (
+    "/system/app/",
+    "/system/priv-app/",
+    "/system/product/app/",
+    "/system/product/priv-app/",
+    "/system/system_ext/app/",
+    "/system/system_ext/priv-app/",
+)
 LOCKED_REMOVALS = (
     {
         "path": "/system/priv-app/SecondaryDisplayLauncher/SecondaryDisplayLauncher.apk",
@@ -143,6 +151,15 @@ def validate_profile(profile: dict, compatibility: dict, port: dict, enforce_loc
         set(replace_names)
         == {"com.android.settings", "com.android.settings.intelligence", "com.android.systemui"},
         "replacement package set drift",
+    )
+    selected_replacements = Counter(
+        row.get("package")
+        for row in compatibility.get("packages", [])
+        if row.get("package") in set(replace_names)
+    )
+    _require(
+        selected_replacements == Counter({name: 1 for name in replace_names}),
+        "every replacement package must map to exactly one selected donor package",
     )
     product_paths = [_locked_path(path, "product selection") for path in _unique_strings(packages.get("product_paths"), "product selection")]
     system_ext_paths = [
@@ -503,6 +520,85 @@ def _cross_directory_duplicates(rows: list[dict]) -> dict[str, list[str]]:
     }
 
 
+def _selected_replacement_directories(profile: dict, compatibility: dict) -> dict[str, str]:
+    targets = set(profile["packages"]["replace_package_names"])
+    candidates: dict[str, set[str]] = defaultdict(set)
+    for expected in compatibility["packages"]:
+        package = expected["package"]
+        if package not in targets:
+            continue
+        logical = _logical_output_path(expected["path"])
+        candidates[package].add(str(PurePosixPath(logical).parent))
+    _require(set(candidates) == targets, "selected replacement package set drift")
+    _require(
+        all(len(directories) == 1 for directories in candidates.values()),
+        "replacement package maps to multiple selected directories",
+    )
+    return {package: next(iter(candidates[package])) for package in sorted(candidates)}
+
+
+def _remove_replaced_packages(profile: dict, root: Path) -> list[dict]:
+    root = _validate_root(root, "replacement cleanup root")
+    targets = set(profile["packages"]["replace_package_names"])
+    rows = _apk_rows(root)
+    candidate_directories: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        if row["package"] in targets:
+            candidate_directories[row["directory"]].add(row["package"])
+
+    removals: list[dict] = []
+    for directory, matched in sorted(candidate_directories.items()):
+        contained = [row for row in rows if row["path"].startswith(directory + "/")]
+        packages = {row["package"] for row in contained}
+        _require(
+            len(matched) == 1 and packages == matched,
+            f"replacement directory contains collateral packages: {directory}",
+        )
+        _require(
+            any(directory.startswith(prefix) for prefix in REPLACEMENT_DIRECTORY_PREFIXES),
+            f"replacement directory is outside approved APK roots: {directory}",
+        )
+        package = next(iter(packages))
+        removals.append(
+            {
+                "package": package,
+                "directory": directory,
+                "apks": [
+                    {
+                        "path": row["path"],
+                        "sha256": row["sha256"],
+                        "certificate_sha256": row["certificate_sha256"],
+                    }
+                    for row in sorted(contained, key=lambda item: item["path"])
+                ],
+            }
+        )
+
+    found = {row["package"] for row in removals}
+    _require(found == targets, "replacement source package set drift")
+    for row in removals:
+        _remove_path(_output_path(root, row["directory"]))
+    return removals
+
+
+def _verify_replacement_outputs(profile: dict, compatibility: dict, rows: list[dict]) -> list[dict]:
+    expected = _selected_replacement_directories(profile, compatibility)
+    actual: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        if row["package"] in expected:
+            actual[row["package"]].add(row["directory"])
+    _require(set(actual) == set(expected), "replacement output package set drift")
+    for package, directory in expected.items():
+        _require(
+            actual[package] == {directory},
+            f"replacement package location drift: {package}",
+        )
+    return [
+        {"package": package, "directory": expected[package]}
+        for package in sorted(expected)
+    ]
+
+
 def _remove_locked_duplicates(root: Path) -> list[dict]:
     removed: list[dict] = []
     for expected in LOCKED_REMOVALS:
@@ -662,6 +758,8 @@ def _transplant(
         _copy_path(source_path(base_root, directory), _output_path(output_root, directory))
         retained_directories.append(directory)
 
+    replaced_directories = _remove_replaced_packages(profile, output_root)
+
     selected: list[str] = []
     for expected in compatibility["packages"]:
         logical = expected["path"]
@@ -691,12 +789,16 @@ def _transplant(
     removed = _remove_locked_duplicates(output_root)
     _require(removed == list(LOCKED_REMOVALS), "locked duplicate removal was not applied exactly once")
     cleanup = _cleanup_preopt(output_root)
-    duplicates = _cross_directory_duplicates(_apk_rows(output_root))
+    output_rows = _apk_rows(output_root)
+    replacement_outputs = _verify_replacement_outputs(profile, compatibility, output_rows)
+    duplicates = _cross_directory_duplicates(output_rows)
     _require(not duplicates, f"cross-directory duplicate packages remain: {', '.join(duplicates)}")
     return {
         "restored_base_paths": sorted(restored),
         "retained_shared_uid_directories": retained_directories,
         "removed_donor_shared_uid_directories": removed_directories,
+        "removed_replacement_directories": replaced_directories,
+        "replacement_outputs": replacement_outputs,
         "selected_packages": selected,
         "runtime_dependencies": runtimes,
         "locked_removals": removed,
@@ -1078,6 +1180,7 @@ def verify_output(
     _require(len(shared_groups) == EXPECTED_SHARED_UID_GROUPS, "shared UID group count drift")
     duplicates = _cross_directory_duplicates(rows)
     _require(not duplicates, f"cross-directory duplicate packages remain: {', '.join(duplicates)}")
+    replacement_outputs = _verify_replacement_outputs(profile, compatibility, rows)
     for removal in LOCKED_REMOVALS:
         _require(not _output_path(output_root, removal["path"]).exists(), f"locked duplicate removal still exists: {removal['path']}")
     residue = _preopt_residue(output_root)
@@ -1108,6 +1211,7 @@ def verify_output(
             "cross_directory_duplicate_packages": 0,
             "zip_failures": 0,
         },
+        "replacement_outputs": replacement_outputs,
         "preopt_residue": 0,
         "patches": patches,
         "identities": identities,

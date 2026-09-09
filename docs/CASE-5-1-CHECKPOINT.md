@@ -97,6 +97,24 @@ Public AOSP test keys, production keys, PackageManager signature bypasses,
 shared-UID removal, source deletion, repartitioning, image repack, and automatic
 flashing all remain forbidden in this subcase.
 
+## Fresh-rebuild drift correction
+
+The first durable local rebuild on 2026-09-09 stopped safely at
+`development_root` after all five source images and the Case 4 input gate had
+passed. It exposed one missing encoded action: the three locked
+`replace_package_names` were validated by the profile but their pre-existing
+base/donor package directories were not removed before the selected XOS
+replacements were installed. That left duplicate `Settings`,
+`SettingsIntelligence`, and `SystemUI` package names.
+
+The transplant now removes only APK directories whose parsed manifest package
+matches one of those three locked names. It rejects a directory containing any
+collateral package, records every removed APK identity, installs the selected
+XOS replacements, and verifies that each replacement exists only at its locked
+donor destination. A failed `development_root` remains resumable: the inner
+Case 4 stage is reconstructed from its last atomic boundary while the five
+already completed Case 5.1 stages are reused.
+
 ## Local acceptance output
 
 A successful run ends with:
@@ -110,7 +128,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 74 tests.
+repository check runs 76 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed
