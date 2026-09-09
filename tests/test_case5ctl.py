@@ -19,6 +19,10 @@ SPEC.loader.exec_module(case5ctl)
 
 
 class Case5ContractTests(unittest.TestCase):
+    def test_status_default_includes_subprocess_error_context(self) -> None:
+        args = case5ctl.build_parser().parse_args(["status", "/tmp/source"])
+        self.assertEqual(args.lines, 60)
+
     def test_stage_order_stops_before_repack_and_flash(self) -> None:
         _profile, _compatibility, _port, _pipeline, contract = case5ctl.metactl.load_and_validate()
         self.assertEqual(contract["status"], "verified")

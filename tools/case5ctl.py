@@ -1130,7 +1130,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "run":
             command.add_argument("--wait-lock", action="store_true", help=argparse.SUPPRESS)
         if name == "status":
-            command.add_argument("--lines", type=int, default=20)
+            command.add_argument("--lines", type=int, default=60)
     return parser
 
 

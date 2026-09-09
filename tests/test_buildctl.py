@@ -156,6 +156,35 @@ class OutputPipelineTests(unittest.TestCase):
     def profiles(self) -> tuple[dict, dict, dict, dict]:
         return buildctl.load_and_validate()
 
+    def test_apk_rows_preserve_logical_path_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            apk = root / "system" / "product" / "priv-app" / "Fixture" / "Fixture.apk"
+            apk.parent.mkdir(parents=True)
+            apk.write_bytes(b"fixture")
+            report = {
+                "path": str(apk),
+                "size": 7,
+                "sha256": "1" * 64,
+                "certificate_sha256": "2" * 64,
+                "package": "com.example.fixture",
+                "shared_uid": "",
+                "abis": [],
+            }
+            with mock.patch.object(buildctl.compatctl, "apk_report", return_value=dict(report)):
+                rows = buildctl._apk_rows(root)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["path"], "/system/product/priv-app/Fixture/Fixture.apk")
+            self.assertEqual(rows[0]["directory"], "/system/product/priv-app/Fixture")
+
+            with mock.patch.object(
+                buildctl.compatctl,
+                "apk_report",
+                return_value={**report, "path": "/unexpected/host/path.apk"},
+            ):
+                with self.assertRaisesRegex(buildctl.BuildError, "report path drift"):
+                    buildctl._apk_rows(root)
+
     def test_generates_only_locked_systemui_privileged_grants(self) -> None:
         profile, _compatibility, _port, _summary = self.profiles()
         document = buildctl.ElementTree.fromstring(buildctl._permission_document(profile))
