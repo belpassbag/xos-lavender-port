@@ -687,6 +687,12 @@ def _preopt_residue(root: Path) -> list[str]:
     return sorted(residue)
 
 
+def _require_no_preopt_residue(root: Path) -> None:
+    residue = _preopt_residue(root)
+    if residue:
+        raise BuildError(f"preopt residue remains: {residue[0]}")
+
+
 def _tree_manifest(root: Path) -> dict:
     root = _validate_root(root, "manifest root")
     digest = hashlib.sha256()
@@ -1185,8 +1191,7 @@ def verify_output(
     replacement_outputs = _verify_replacement_outputs(profile, compatibility, rows)
     for removal in LOCKED_REMOVALS:
         _require(not _output_path(output_root, removal["path"]).exists(), f"locked duplicate removal still exists: {removal['path']}")
-    residue = _preopt_residue(output_root)
-    _require(not residue, f"preopt residue remains: {residue[0]}")
+    _require_no_preopt_residue(output_root)
     patches = {
         "privapp_permissions": _verify_permissions(profile, output_root),
         "service_contexts": _verify_service_contexts(profile, compatibility, output_root),

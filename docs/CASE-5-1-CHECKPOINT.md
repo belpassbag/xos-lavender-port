@@ -124,6 +124,13 @@ paths to transplant, signing, and output verification. A regression test locks
 that boundary. The default status view also retains 60 log lines so a child
 process error remains visible alongside the wrapper traceback.
 
+The third retry reached final output verification with no preoptimized residue,
+but the success path eagerly formatted an error message using the first element
+of the empty residue list. The verifier now enters the error path only when a
+real residue exists. Regression coverage locks both the clean-tree success case
+and the diagnostic path for actual residue; all completed outer stages and the
+inner signed tree remain reusable on resume.
+
 ## Local acceptance output
 
 A successful run ends with:
@@ -137,7 +144,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 78 tests.
+repository check runs 79 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed
