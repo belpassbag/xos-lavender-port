@@ -59,6 +59,11 @@ EXPECTED_OUTPUT_APKS = 227
 EXPECTED_DEVELOPMENT_APKS = 90
 EXPECTED_STANDALONE_APKS = 137
 EXPECTED_SHARED_UID_GROUPS = 11
+SELINUX_MARKER_PATHS = (
+    ("plat", "/system/etc/selinux/plat_sepolicy_and_mapping.sha256"),
+    ("product", "/system/product/etc/selinux/product_sepolicy_and_mapping.sha256"),
+    ("system_ext", "/system/system_ext/etc/selinux/system_ext_sepolicy_and_mapping.sha256"),
+)
 
 
 class BuildError(RuntimeError):
@@ -1073,6 +1078,28 @@ def _verify_hardware_guard(port: dict, root: Path) -> dict:
     return {"forbidden_image_hits": [], "vendor_tree_packaged": False}
 
 
+def _verify_selinux_markers(compatibility: dict, root: Path) -> dict[str, dict]:
+    markers: dict[str, dict] = {}
+    for identifier, logical in SELINUX_MARKER_PATHS:
+        path = _output_path(root, logical)
+        _require(
+            path.is_file() and not path.is_symlink(),
+            f"base {identifier} SELinux marker is missing",
+        )
+        try:
+            value = path.read_text(encoding="ascii").strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise BuildError(f"cannot read base {identifier} SELinux marker: {path}") from exc
+        expected = compatibility["selinux"][f"{identifier}_precompiled_sha256"]
+        _require(value == expected, f"base {identifier} SELinux marker drift")
+        markers[identifier] = {
+            "path": logical,
+            "sha256": value,
+            "file_sha256": compatctl.sha256_file(path),
+        }
+    return markers
+
+
 def _verify_static_identities(compatibility: dict, root: Path, development_fingerprint: str) -> dict:
     selected: list[dict] = []
     for expected in compatibility["packages"]:
@@ -1124,18 +1151,7 @@ def _verify_static_identities(compatibility: dict, root: Path, development_finge
     matrix_sha256 = compatctl.sha256_file(matrix)
     _require(matrix_sha256 == compatibility["vintf"]["matrix_level_3_sha256"], "base VINTF level-3 matrix drift")
 
-    marker_paths = {
-        "plat": "/system/etc/selinux/plat_sepolicy_and_mapping.sha256",
-        "product": "/system/product/etc/selinux/product_sepolicy_and_mapping.sha256",
-        "system_ext": "/system/system_ext/etc/selinux/system_ext_sepolicy_and_mapping.sha256",
-    }
-    markers: dict[str, dict] = {}
-    for identifier, logical in marker_paths.items():
-        path = _output_path(root, logical)
-        digest = compatctl.sha256_file(path)
-        expected = compatibility["selinux"][f"{identifier}_precompiled_sha256"]
-        _require(digest == expected, f"base {identifier} SELinux marker drift")
-        markers[identifier] = {"path": logical, "sha256": digest}
+    markers = _verify_selinux_markers(compatibility, root)
     return {
         "selected_packages": selected,
         "runtime_dependencies": runtimes,
