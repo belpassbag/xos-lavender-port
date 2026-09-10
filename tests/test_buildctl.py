@@ -231,6 +231,20 @@ class OutputPipelineTests(unittest.TestCase):
             self.assertEqual(report["removed_regular_bytes"], 6)
             self.assertEqual(buildctl._preopt_residue(root), [])
 
+    def test_preopt_verifier_accepts_empty_and_reports_real_residue(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            buildctl._require_no_preopt_residue(root)
+
+            residue = root / "system" / "app" / "One" / "oat" / "arm64" / "One.odex"
+            residue.parent.mkdir(parents=True)
+            residue.write_bytes(b"preopt")
+            with self.assertRaisesRegex(
+                buildctl.BuildError,
+                r"preopt residue remains: /system/app/One/oat",
+            ):
+                buildctl._require_no_preopt_residue(root)
+
     def test_duplicate_package_guard_allows_splits_only_in_one_directory(self) -> None:
         rows = [
             {"package": "com.example.split", "directory": "/system/app/Split"},
