@@ -131,6 +131,23 @@ real residue exists. Regression coverage locks both the clean-tree success case
 and the diagnostic path for actual residue; all completed outer stages and the
 inner signed tree remain reusable on resume.
 
+The fourth retry passed the APK inventory, signer, duplicate-package, preopt,
+permission, service-context, MAC-permission, selected-runtime, classpath, and
+VINTF gates. It then exposed a semantic mismatch shared by all three SELinux
+marker checks: the compatibility contract stores the 64-digit hash contained
+inside each marker, while output verification hashed the marker file itself and
+compared that unrelated digest to its contents. Output verification now reads
+and compares the marker value exactly as the original compatibility verifier
+does for `plat`, `product`, and `system_ext`, while separately reporting the
+marker file digest. Regression coverage proves that valid marker contents pass
+even though their file digests differ, and that real marker drift still fails.
+
+The only gates after these markers were audited in the same correction. The
+hardware guard has clean-tree, forbidden-image, and vendor-tree regression
+coverage; the deterministic manifest test remains active; and the locked
+capacity plan retains 558,571,520 bytes of conservative headroom. No payload,
+selection, signing policy, source archive, repack, or flash boundary changed.
+
 ## Local acceptance output
 
 A successful run ends with:
@@ -144,7 +161,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 79 tests.
+repository check runs 81 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed

@@ -245,6 +245,53 @@ class OutputPipelineTests(unittest.TestCase):
             ):
                 buildctl._require_no_preopt_residue(root)
 
+    def test_selinux_marker_verifier_compares_marker_values(self) -> None:
+        _profile, compatibility, _port, _summary = self.profiles()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            paths = {}
+            for identifier, logical in buildctl.SELINUX_MARKER_PATHS:
+                path = root.joinpath(*Path(logical).parts[1:])
+                path.parent.mkdir(parents=True, exist_ok=True)
+                expected = compatibility["selinux"][f"{identifier}_precompiled_sha256"]
+                path.write_text(expected + "\n", encoding="ascii")
+                self.assertNotEqual(buildctl.compatctl.sha256_file(path), expected)
+                paths[identifier] = path
+
+            report = buildctl._verify_selinux_markers(compatibility, root)
+            for identifier, path in paths.items():
+                expected = compatibility["selinux"][f"{identifier}_precompiled_sha256"]
+                self.assertEqual(report[identifier]["sha256"], expected)
+                self.assertEqual(
+                    report[identifier]["file_sha256"],
+                    buildctl.compatctl.sha256_file(path),
+                )
+
+            paths["plat"].write_text("0" * 64 + "\n", encoding="ascii")
+            with self.assertRaisesRegex(buildctl.BuildError, "base plat SELinux marker drift"):
+                buildctl._verify_selinux_markers(compatibility, root)
+
+    def test_hardware_guard_accepts_clean_tree_and_rejects_payload_leaks(self) -> None:
+        _profile, _compatibility, port, _summary = self.profiles()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            self.assertEqual(
+                buildctl._verify_hardware_guard(port, root),
+                {"forbidden_image_hits": [], "vendor_tree_packaged": False},
+            )
+
+            forbidden = root / "system" / "etc" / "boot.img"
+            forbidden.parent.mkdir(parents=True)
+            forbidden.write_bytes(b"forbidden")
+            with self.assertRaisesRegex(buildctl.BuildError, "forbidden donor hardware"):
+                buildctl._verify_hardware_guard(port, root)
+            forbidden.unlink()
+
+            vendor = root / "system" / "vendor"
+            vendor.mkdir(parents=True)
+            with self.assertRaisesRegex(buildctl.BuildError, "vendor directory"):
+                buildctl._verify_hardware_guard(port, root)
+
     def test_duplicate_package_guard_allows_splits_only_in_one_directory(self) -> None:
         rows = [
             {"package": "com.example.split", "directory": "/system/app/Split"},
