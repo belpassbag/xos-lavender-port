@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import posixpath
 import re
 import shutil
 import stat
@@ -1059,6 +1060,32 @@ def _verify_mac_permissions(root: Path, certificate: Path) -> dict:
     }
 
 
+def _inspect_vendor_boundary(root: Path, logical: str, *, required: bool) -> dict:
+    path = _output_path(root, logical)
+    if path.is_symlink():
+        _require(logical == "/system/vendor", "root /vendor must remain a real mountpoint")
+        target = os.readlink(path)
+        destination = posixpath.normpath(posixpath.join(posixpath.dirname(logical), target))
+        _require(destination == "/vendor", f"vendor compatibility link drift: {logical} -> {target}")
+        return {
+            "path": logical,
+            "type": "symlink",
+            "target": target,
+            "destination": destination,
+        }
+    if not path.exists():
+        _require(not required, f"required vendor mountpoint is missing: {logical}")
+        return {"path": logical, "type": "absent"}
+    _require(path.is_dir(), f"vendor boundary is not a directory or symlink: {logical}")
+    try:
+        entries = sorted(child.name for child in path.iterdir())
+    except OSError as exc:
+        raise BuildError(f"cannot inspect vendor boundary: {logical}") from exc
+    if entries:
+        raise BuildError(f"vendor payload entry was packaged at {logical}: {entries[0]}")
+    return {"path": logical, "type": "empty-mountpoint", "entries": 0}
+
+
 def _verify_hardware_guard(port: dict, root: Path) -> dict:
     forbidden = set(port["policy"]["forbidden_donor_output_images"])
     hits: list[str] = []
@@ -1069,13 +1096,16 @@ def _verify_hardware_guard(port: dict, root: Path) -> dict:
             path = parent / name
             if name in forbidden and not path.is_symlink():
                 hits.append("/" + path.relative_to(root).as_posix())
-    vendor_paths = (root / "vendor", root / "system" / "vendor")
-    _require(
-        all(not path.is_dir() or path.is_symlink() for path in vendor_paths),
-        "a vendor directory was packaged into the system root",
-    )
     _require(not hits, f"forbidden donor hardware output found: {', '.join(sorted(hits))}")
-    return {"forbidden_image_hits": [], "vendor_tree_packaged": False}
+    boundaries = [
+        _inspect_vendor_boundary(root, "/vendor", required=True),
+        _inspect_vendor_boundary(root, "/system/vendor", required=False),
+    ]
+    return {
+        "forbidden_image_hits": [],
+        "vendor_tree_packaged": False,
+        "vendor_boundaries": boundaries,
+    }
 
 
 def _verify_selinux_markers(compatibility: dict, root: Path) -> dict[str, dict]:

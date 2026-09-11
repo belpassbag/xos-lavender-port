@@ -271,25 +271,46 @@ class OutputPipelineTests(unittest.TestCase):
             with self.assertRaisesRegex(buildctl.BuildError, "base plat SELinux marker drift"):
                 buildctl._verify_selinux_markers(compatibility, root)
 
-    def test_hardware_guard_accepts_clean_tree_and_rejects_payload_leaks(self) -> None:
+    def test_vendor_guard_accepts_mountpoints_and_rejects_payload_trees(self) -> None:
         _profile, _compatibility, port, _summary = self.profiles()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
+            (root / "vendor").mkdir()
+            system_vendor = root / "system" / "vendor"
+            system_vendor.parent.mkdir()
+            system_vendor.symlink_to("/vendor", target_is_directory=True)
+
+            report = buildctl._verify_hardware_guard(port, root)
+            self.assertFalse(report["vendor_tree_packaged"])
             self.assertEqual(
-                buildctl._verify_hardware_guard(port, root),
-                {"forbidden_image_hits": [], "vendor_tree_packaged": False},
+                [row["type"] for row in report["vendor_boundaries"]],
+                ["empty-mountpoint", "symlink"],
             )
+
+            payload = root / "vendor" / "lib64"
+            payload.mkdir()
+            with self.assertRaisesRegex(buildctl.BuildError, "vendor payload entry"):
+                buildctl._verify_hardware_guard(port, root)
+            payload.rmdir()
+
+            system_vendor.unlink()
+            system_vendor.symlink_to("/system", target_is_directory=True)
+            with self.assertRaisesRegex(buildctl.BuildError, "compatibility link drift"):
+                buildctl._verify_hardware_guard(port, root)
+
+    def test_hardware_guard_rejects_forbidden_images(self) -> None:
+        _profile, _compatibility, port, _summary = self.profiles()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "vendor").mkdir()
+            system_vendor = root / "system" / "vendor"
+            system_vendor.parent.mkdir()
+            system_vendor.symlink_to("/vendor", target_is_directory=True)
 
             forbidden = root / "system" / "etc" / "boot.img"
             forbidden.parent.mkdir(parents=True)
             forbidden.write_bytes(b"forbidden")
             with self.assertRaisesRegex(buildctl.BuildError, "forbidden donor hardware"):
-                buildctl._verify_hardware_guard(port, root)
-            forbidden.unlink()
-
-            vendor = root / "system" / "vendor"
-            vendor.mkdir(parents=True)
-            with self.assertRaisesRegex(buildctl.BuildError, "vendor directory"):
                 buildctl._verify_hardware_guard(port, root)
 
     def test_duplicate_package_guard_allows_splits_only_in_one_directory(self) -> None:
