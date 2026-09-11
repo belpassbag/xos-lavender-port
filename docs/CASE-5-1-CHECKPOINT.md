@@ -161,6 +161,23 @@ root cause, sources, pipeline provenance, and corrected invariant are recorded
 in `docs/CASE-5-1-VENDOR-GUARD-AUDIT.md`. No payload, selection, signing
 policy, source archive, repack, or flash boundary changed.
 
+The sixth retry completed both `development_root` and the independent
+`output_verification`, then stopped at `metadata_base_system` with
+`unsafe ext4 entry name`. The failing row was not a live Android path.
+`debugfs` 1.47.0 always walks directories with
+`DIRENT_FLAG_INCLUDE_EMPTY`; its parse format consequently emits inode-zero
+records for unused ext4 directory slots and htree bookkeeping. The parser
+accepted the record grammar but checked its intentionally empty name before
+classifying inode zero, producing a false positive on the real system image.
+
+Metadata parsing now discards only inode-zero records after verifying that the
+mode, UID, GID, and size fields that `debugfs` synthesizes for them are all
+zero. Live inodes still require a nonempty safe name, and a malformed inode-zero
+record remains fatal. The kernel ext4 format, matching e2fsprogs 1.47.0 source,
+the exact failure path, corrected invariant, and downstream audit are recorded
+in `docs/CASE-5-1-EXT4-DIRENT-AUDIT.md`. The seven completed outer stages stay
+reusable; the next run starts at `metadata_base_system`.
+
 ## Local acceptance output
 
 A successful run ends with:
@@ -174,7 +191,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 82 tests.
+repository check runs 85 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed
