@@ -143,10 +143,23 @@ marker file digest. Regression coverage proves that valid marker contents pass
 even though their file digests differ, and that real marker drift still fails.
 
 The only gates after these markers were audited in the same correction. The
-hardware guard has clean-tree, forbidden-image, and vendor-tree regression
-coverage; the deterministic manifest test remains active; and the locked
-capacity plan retains 558,571,520 bytes of conservative headroom. No payload,
-selection, signing policy, source archive, repack, or flash boundary changed.
+hardware guard had clean-tree, forbidden-image, and vendor-tree regression
+coverage, but its clean fixture omitted the system-as-root `/vendor`
+mountpoint. The deterministic manifest test remains active, and the locked
+capacity plan retains 558,571,520 bytes of conservative headroom.
+
+The fifth retry passed all three corrected SELinux marker gates, proving their
+fix against the real tree, then stopped at the hardware guard because it treated
+the required `/vendor` directory itself as a packaged vendor payload. This is a
+false positive: AOSP's system-as-root layout explicitly includes `/vendor` as a
+mountpoint and `/system/vendor` as its compatibility link, while lavender's
+LineageOS 18.1 fstab mounts the separate vendor partition at `/vendor`. The
+guard now verifies that `/vendor` is an empty mountpoint and that
+`/system/vendor` is absent, empty, or resolves to `/vendor`; it rejects any
+payload entry, regular file, divergent link, or forbidden hardware image. The
+root cause, sources, pipeline provenance, and corrected invariant are recorded
+in `docs/CASE-5-1-VENDOR-GUARD-AUDIT.md`. No payload, selection, signing
+policy, source archive, repack, or flash boundary changed.
 
 ## Local acceptance output
 
@@ -161,7 +174,7 @@ A successful run ends with:
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 81 tests.
+repository check runs 82 tests.
 
 Case 5.2 may begin only after the user's local checkpoint reports `verified`.
 That later subcase will map the captured source metadata onto the transformed
