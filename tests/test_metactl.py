@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +81,35 @@ class DebugfsParserTests(unittest.TestCase):
         self.assertEqual(file_row["permissions_octal"], "0755")
         self.assertEqual((file_row["uid"], file_row["gid"]), (1000, 2000))
         self.assertEqual(link_row["type"], "symlink")
+
+    def test_skips_debugfs_inode_zero_unused_directory_records(self) -> None:
+        rows = metactl.parse_ls_output(
+            """debugfs 1.47.0 (5-Feb-2023)
+/12/040755/0/0/.//
+/2/040755/0/0/..//
+/0/000000/0/0//0/
+/13/100644/0/0/live-file/7/
+"""
+        )
+        self.assertEqual([row["name"] for row in rows], [".", "..", "live-file"])
+        self.assertNotIn(0, [row["inode"] for row in rows])
+
+    def test_rejects_malformed_inode_zero_debugfs_record(self) -> None:
+        with self.assertRaisesRegex(metactl.MetadataError, "malformed unused ext4 directory entry"):
+            metactl.parse_ls_output(
+                """debugfs 1.47.0 (5-Feb-2023)
+/0/100644/1000/2000//7/
+"""
+            )
+
+    def test_directory_listing_error_reports_the_scanned_ext4_path(self) -> None:
+        with mock.patch.object(
+            metactl,
+            "_run_debugfs_text",
+            return_value="/13/100644/0/0//7/\n",
+        ):
+            with self.assertRaisesRegex(metactl.MetadataError, "ext4 directory: /system"):
+                metactl._list_directory(Path("/fixture.img"), "/system")
 
     def test_parses_text_and_binary_extended_attributes(self) -> None:
         output = """debugfs 1.47.0 (5-Feb-2023)
@@ -176,6 +206,18 @@ class Ext4MetadataIntegrationTests(unittest.TestCase):
             tampered["entries"][1]["uid"] += 1
             output.write_text(json.dumps(tampered), encoding="utf-8")
             with self.assertRaisesRegex(metactl.MetadataError, "digest"):
+                metactl.verify_snapshot(output)
+
+            malformed = deepcopy(snapshot)
+            malformed["entries"][0]["inode"] = 0
+            malformed["metadata_sha256"] = metactl.compatctl.canonical_digest(malformed["entries"])
+            malformed["summary"] = metactl._snapshot_summary(
+                malformed["entries"],
+                "security.selinux",
+                "security.capability",
+            )
+            output.write_text(json.dumps(malformed), encoding="utf-8")
+            with self.assertRaisesRegex(metactl.MetadataError, "invalid inode"):
                 metactl.verify_snapshot(output)
 
 

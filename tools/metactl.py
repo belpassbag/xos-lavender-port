@@ -286,19 +286,40 @@ def parse_ls_output(output: str) -> list[dict]:
         match = LS_RECORD.fullmatch(line)
         _require(match is not None, f"unrecognized debugfs ls output: {line}")
         assert match is not None
-        name = match.group("name")
-        _require(name and "\x00" not in name and "\n" not in name, "unsafe ext4 entry name")
+        inode = int(match.group("inode"))
         mode = int(match.group("mode"), 8)
+        uid = int(match.group("uid"))
+        gid = int(match.group("gid"))
+        name = match.group("name")
+        size = int(match.group("size") or "0")
+
+        # debugfs deliberately invokes ext2fs_dir_iterate2() with
+        # DIRENT_FLAG_INCLUDE_EMPTY.  Its parse output therefore contains
+        # inode-zero records for unused ext4 directory slots and htree
+        # bookkeeping.  They do not name live filesystem objects and must not
+        # enter the metadata tree.  debugfs zeroes the synthetic inode fields
+        # before printing these records; retain that as a corruption guard.
+        if inode == 0:
+            _require(
+                mode == 0 and uid == 0 and gid == 0 and size == 0,
+                f"malformed unused ext4 directory entry: {line}",
+            )
+            continue
+
+        _require(
+            name and "\x00" not in name and "\n" not in name,
+            f"unsafe live ext4 entry name: {name!r}",
+        )
         rows.append(
             {
-                "inode": int(match.group("inode")),
+                "inode": inode,
                 "type": _entry_kind(mode),
                 "mode_octal": f"{mode:06o}",
                 "permissions_octal": f"{stat.S_IMODE(mode):04o}",
-                "uid": int(match.group("uid")),
-                "gid": int(match.group("gid")),
+                "uid": uid,
+                "gid": gid,
                 "name": name,
-                "size": int(match.group("size") or "0"),
+                "size": size,
             }
         )
     _require(rows, "debugfs directory listing is empty")
@@ -308,7 +329,10 @@ def parse_ls_output(output: str) -> list[dict]:
 def _list_directory(image: Path, path: str) -> list[dict]:
     output = _run_debugfs_text(image, f"ls -p -l {path}")
     _require("ls: " not in output and "File not found" not in output, f"cannot list ext4 path: {path}")
-    return parse_ls_output(output)
+    try:
+        return parse_ls_output(output)
+    except MetadataError as exc:
+        raise MetadataError(f"{exc}; ext4 directory: {path}") from exc
 
 
 def _join_path(parent: str, name: str) -> str:
@@ -649,7 +673,8 @@ def verify_snapshot(path: Path) -> dict:
         mode = int(entry["mode_octal"], 8)
         _require(_entry_kind(mode) == entry["type"], f"mode/type drift: {path_value}")
         _require(f"{stat.S_IMODE(mode):04o}" == entry["permissions_octal"], f"mode/permissions drift: {path_value}")
-        for number in ("inode", "uid", "gid", "size"):
+        _require(isinstance(entry.get("inode"), int) and entry["inode"] > 0, f"invalid inode: {path_value}")
+        for number in ("uid", "gid", "size"):
             _require(isinstance(entry.get(number), int) and entry[number] >= 0, f"invalid {number}: {path_value}")
         _require(
             any(root == "/" or path_value == root or path_value.startswith(root + "/") for root in roots),
