@@ -1,7 +1,7 @@
 # Case 5.1 ext4 directory-entry parser audit
 
-Status: **root cause established; correction verified by repository tests;
-local metadata resume pending**.
+Status: **resolved; repository tests and the final attempt 7 metadata snapshots
+verified the correction**.
 
 ## Problem
 
@@ -90,3 +90,7 @@ Regression coverage proves that:
 The patch changes only read-only metadata interpretation. It does not modify
 any source image, development root, package selection, signing key, SELinux
 policy, repack behavior, production signing, or flashing boundary.
+
+Attempt 7 resumed at `metadata_base_system`, captured all four source-metadata
+snapshots, and atomically published a checkpoint whose final verification
+reported `status: verified`. No inode-zero record entered persisted metadata.

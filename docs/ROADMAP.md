@@ -67,8 +67,8 @@ fixes, development-signing result, and the Case 5 boundary are recorded in
 
 ## Case 5 — Repack and static validation
 
-Status: **in progress; Case 5.1 implementation verified, local payload
-execution pending**.
+Status: **in progress; Case 5.1 accepted locally on 2026-09-11, Case 5.2 not
+started**.
 
 ### Case 5.1 — Durable rebuild and source metadata
 
@@ -80,10 +80,12 @@ execution pending**.
   xattrs directly from the locked source ext4 images.
 - Publish an atomic machine-readable checkpoint without repacking or flashing.
 
-Acceptance: `reports/case5-1-checkpoint.json` passes on the payload-holding
-machine. Tooling and synthetic-ext4 verification are complete; the local
-payload run is still required. See
-[CASE-5-1-CHECKPOINT.md](CASE-5-1-CHECKPOINT.md).
+Acceptance: `reports/case5-1-checkpoint.json` passed on the payload-holding
+machine in attempt 7. All 12 stages are complete, all four metadata snapshots
+are verified, and no worker remains live. See
+[CASE-5-1-CHECKPOINT.md](CASE-5-1-CHECKPOINT.md),
+[CASE-5-1-REPORT.md](CASE-5-1-REPORT.md), and
+[CASE-5-1-EVIDENCE.json](CASE-5-1-EVIDENCE.json).
 
 ### Case 5.2 — Metadata reconstruction and image repack
 
@@ -91,7 +93,7 @@ payload run is still required. See
 - Apply source-proven metadata to every final path and verify there are no
   unmapped entries.
 
-This subcase is blocked until Case 5.1 local acceptance.
+This subcase is unblocked by Case 5.1 local acceptance but has not started.
 
 ### Case 5.3 — Recovery test package
 

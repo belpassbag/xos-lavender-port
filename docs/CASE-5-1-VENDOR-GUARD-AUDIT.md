@@ -1,7 +1,7 @@
 # Case 5.1 vendor-boundary failure audit
 
-Status: **root cause established; corrective implementation verified by
-repository tests; local payload resume pending**.
+Status: **resolved; repository tests and the final attempt 7 payload checkpoint
+verified the correction**.
 
 ## Observed failure
 
@@ -78,3 +78,8 @@ Regression coverage constructs the real system-as-root topology and proves:
 The patch changes only verifier semantics and reporting. It does not alter the
 signed tree, source archives, package selection, SELinux policy, development
 key, partition images, repack boundary, or flashing boundary.
+
+Attempt 6 subsequently passed this hardware guard and completed both the
+development-root build and its independent output verification. Attempt 7 then
+completed all remaining metadata stages and published the verified Case 5.1
+checkpoint, closing the real-payload verification requirement.

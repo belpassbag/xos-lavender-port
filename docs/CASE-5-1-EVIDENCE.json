@@ -1,0 +1,106 @@
+{
+  "accepted_at": "2026-09-11T07:33:29Z",
+  "boundary": {
+    "case_5_1_complete": true,
+    "device_flash_requires_manual_approval": true,
+    "next_allowed": "Case 5.2 metadata reconstruction and system-image repack"
+  },
+  "case": "5.1",
+  "checkpoint": {
+    "path": "/home/zirex/XOS-Lavender-Port/case5-local/reports/case5-1-checkpoint.json",
+    "sha256": "4ed6e387f32113a77b59112464f001e46215bbbc2109bb95d9809d194377050c",
+    "status": "verified"
+  },
+  "development_root": {
+    "tree_manifest": {
+      "regular_bytes": 1761713439,
+      "regular_files": 3089,
+      "sha256": "f99262b7402f885024564815da8df042a5aa939159512efbc0fedf6573bf277a",
+      "symbolic_links": 262
+    }
+  },
+  "development_signing": {
+    "certificate_sha256": "0d3704757d2faf719a06e07046152571a331c119cf78371349a7523cf689b623",
+    "mode": "project-development",
+    "private_key_committed": false,
+    "production_signing": false
+  },
+  "evidence_source": {
+    "attempt": 7,
+    "command": "./scripts/case5-local.sh status /home/zirex/XOS-Lavender-Port",
+    "kind": "payload-host-status-output",
+    "tooling_git_commit": "d762ce62c9bb8e913fb8e244f8d1be6711c64dd3"
+  },
+  "guards": {
+    "automatic_flash": false,
+    "image_repack": false,
+    "production_signing": false,
+    "source_archives_preserved": true
+  },
+  "images": [
+    {
+      "id": "base_system",
+      "sha256": "3536fa28745278ecbd38cc0a0f09329a1c19cf1f959aeb189ee71c1c9f904501",
+      "size": 3640619008
+    },
+    {
+      "id": "base_vendor",
+      "sha256": "967a4b560b774e869a5ce16f6b5ee6b73dedfdfde7fa4ef641b3b9cdce4f8f60",
+      "size": 2080305152
+    },
+    {
+      "id": "donor_system",
+      "sha256": "2fb5bf44091b6ddd9d63799351c38f75c26499809f6db832e24ced3f5700313d",
+      "size": 1121648640
+    },
+    {
+      "id": "donor_product",
+      "sha256": "a3e760d683423b419f2b859fbf3ac24cfd41276939291e819cbeb05e9db6fcbb",
+      "size": 3206438912
+    },
+    {
+      "id": "donor_system_ext",
+      "sha256": "7de9ac35bd7c51e683b86546278e2c630024e9f8c9a01c9d4b99f1836324b002",
+      "size": 1706311680
+    }
+  ],
+  "metadata": {
+    "snapshots": 4,
+    "status": "verified"
+  },
+  "schema_version": 1,
+  "source_archives": [
+    {
+      "filename": "lineage-18.1-20221025-nightly-lavender-signed.zip",
+      "role": "base",
+      "sha256": "4845c4910593a6b8a612c5ea9af1b6752fe8ab2514f62e062abe759e760b82ba",
+      "size": 851061345
+    },
+    {
+      "filename": "X6812B-H6912KL-R-OP-231009V922.zip",
+      "role": "donor",
+      "sha256": "5066e7b7e397bad14b81d91f42a1d79e05c150e37c7b047f7b52e5b4b8a178b0",
+      "size": 3939359066
+    }
+  ],
+  "state": {
+    "active_stage": null,
+    "completed_stages": [
+      "preflight",
+      "development_key",
+      "base_images",
+      "donor_images",
+      "case4_inputs",
+      "development_root",
+      "output_verification",
+      "metadata_base_system",
+      "metadata_donor_system",
+      "metadata_donor_product",
+      "metadata_donor_system_ext",
+      "checkpoint"
+    ],
+    "process_live": false,
+    "status": "complete"
+  },
+  "status": "accepted-local"
+}

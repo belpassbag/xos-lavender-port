@@ -1,6 +1,6 @@
 # Case 5.1 — durable local rebuild and metadata checkpoint
 
-Status: **implementation verified; local payload execution pending**.
+Status: **accepted locally on 2026-09-11; attempt 7 checkpoint verified**.
 
 Cases 1 through 4 remain closed. This subcase does not repeat their audits and
 does not build a flashable image. It provides one durable local entry point for
@@ -180,7 +180,7 @@ reusable; the next run starts at `metadata_base_system`.
 
 ## Local acceptance output
 
-A successful run ends with:
+The attempt 7 payload run ended with:
 
 - state `status` equal to `complete`;
 - a re-verified development root and its tree-manifest digest;
@@ -188,12 +188,23 @@ A successful run ends with:
 - `reports/case5-1-checkpoint.json` with `status: verified`;
 - a durable log at `logs/case5-1.log`.
 
+The resulting checkpoint SHA-256 is
+`4ed6e387f32113a77b59112464f001e46215bbbc2109bb95d9809d194377050c`.
+Its development-tree manifest SHA-256 is
+`f99262b7402f885024564815da8df042a5aa939159512efbc0fedf6573bf277a`;
+the tree contains 3,089 regular files, 262 symbolic links, and 1,761,713,439
+regular-file bytes. All four metadata snapshots passed, the state is
+`complete`, and no worker remains active. The complete closure and
+machine-readable evidence are recorded in
+[`CASE-5-1-REPORT.md`](CASE-5-1-REPORT.md) and
+[`CASE-5-1-EVIDENCE.json`](CASE-5-1-EVIDENCE.json).
+
 The payload cannot be executed in repository CI because proprietary images are
 not committed. CI verifies the orchestration, safety contract, interruption
 recovery, metadata parsers, and a real synthetic ext4 round trip. The current
-repository check runs 85 tests.
+repository check runs 87 tests.
 
-Case 5.2 may begin only after the user's local checkpoint reports `verified`.
-That later subcase will map the captured source metadata onto the transformed
-tree and repack it; it must not infer Android ownership or labels from host
-filesystem values.
+The local `verified` gate is now satisfied. Case 5.2 may map the captured source
+metadata onto the transformed tree and repack it; it must not infer Android
+ownership or labels from host filesystem values. This closure does not start
+Case 5.2.

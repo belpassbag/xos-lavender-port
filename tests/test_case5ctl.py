@@ -49,6 +49,61 @@ class Case5ContractTests(unittest.TestCase):
                 REPOSITORY_ROOT / "work" / "case5-local",
             )
 
+    def test_local_acceptance_evidence_closes_exact_stage_boundary(self) -> None:
+        evidence = json.loads(
+            (REPOSITORY_ROOT / "docs" / "CASE-5-1-EVIDENCE.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(evidence["schema_version"], 1)
+        self.assertEqual(evidence["case"], "5.1")
+        self.assertEqual(evidence["status"], "accepted-local")
+        self.assertEqual(evidence["state"]["status"], "complete")
+        self.assertIsNone(evidence["state"]["active_stage"])
+        self.assertFalse(evidence["state"]["process_live"])
+        self.assertEqual(evidence["state"]["completed_stages"], list(case5ctl.STAGES))
+        self.assertEqual(evidence["checkpoint"]["status"], "verified")
+        self.assertRegex(evidence["checkpoint"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(evidence["metadata"], {"snapshots": 4, "status": "verified"})
+        self.assertTrue(evidence["boundary"]["case_5_1_complete"])
+        self.assertIn("Case 5.2", evidence["boundary"]["next_allowed"])
+        self.assertEqual(
+            evidence["guards"],
+            {
+                "automatic_flash": False,
+                "image_repack": False,
+                "production_signing": False,
+                "source_archives_preserved": True,
+            },
+        )
+
+    def test_local_acceptance_evidence_matches_locked_payload_identities(self) -> None:
+        evidence = json.loads(
+            (REPOSITORY_ROOT / "docs" / "CASE-5-1-EVIDENCE.json").read_text(encoding="utf-8")
+        )
+        _profile, compatibility, port, _pipeline, _contract = case5ctl.metactl.load_and_validate()
+        expected_sources = [
+            {
+                "filename": port[role]["filename"],
+                "role": role,
+                "sha256": port[role]["sha256"],
+                "size": port[role]["size"],
+            }
+            for role in ("base", "donor")
+        ]
+        expected_images = [
+            {field: image[field] for field in ("id", "sha256", "size")}
+            for image in compatibility["images"]
+        ]
+        self.assertEqual(evidence["source_archives"], expected_sources)
+        self.assertEqual(evidence["images"], expected_images)
+        self.assertEqual(
+            evidence["evidence_source"]["tooling_git_commit"],
+            "d762ce62c9bb8e913fb8e244f8d1be6711c64dd3",
+        )
+        self.assertEqual(evidence["evidence_source"]["attempt"], 7)
+        self.assertEqual(evidence["development_signing"]["mode"], "project-development")
+        self.assertFalse(evidence["development_signing"]["private_key_committed"])
+        self.assertFalse(evidence["development_signing"]["production_signing"])
+
 
 class DurableStateTests(unittest.TestCase):
     def setUp(self) -> None:
