@@ -131,7 +131,10 @@ forbids packaging or flashing them on `lavender`.
    ```
 
    The exact execution boundary and generated checkpoint are documented in
-   [docs/CASE-5-1-CHECKPOINT.md](docs/CASE-5-1-CHECKPOINT.md). Repack, recovery
+   [docs/CASE-5-1-CHECKPOINT.md](docs/CASE-5-1-CHECKPOINT.md). The accepted
+   local result and its non-secret machine-readable evidence are in
+   [docs/CASE-5-1-REPORT.md](docs/CASE-5-1-REPORT.md) and
+   [docs/CASE-5-1-EVIDENCE.json](docs/CASE-5-1-EVIDENCE.json). Repack, recovery
    ZIP creation, production signing, and flashing remain later gates.
 
 See [docs/AUDIT-1.md](docs/AUDIT-1.md) for the verified feasibility baseline,
@@ -147,12 +150,14 @@ history. The accepted static build evidence and remaining boundary are in
 [docs/CASE-4-REPORT.md](docs/CASE-4-REPORT.md) and
 [docs/CASE-4-EVIDENCE.json](docs/CASE-4-EVIDENCE.json), and see
 [docs/CASE-5-1-CHECKPOINT.md](docs/CASE-5-1-CHECKPOINT.md) for the durable local
-rebuild and ext4 metadata-capture contract. The complete case-by-case sequence
-is in [docs/ROADMAP.md](docs/ROADMAP.md).
+rebuild and ext4 metadata-capture contract. Its final accepted result is in
+[docs/CASE-5-1-REPORT.md](docs/CASE-5-1-REPORT.md) and
+[docs/CASE-5-1-EVIDENCE.json](docs/CASE-5-1-EVIDENCE.json). The complete
+case-by-case sequence is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Status
 
-Cases 1 through 4 are accepted. Case 5.1 orchestration and metadata capture are
-implemented and pass repository tests; execution against the user's local
-payload is pending. Production signing remains deferred until physical boot
-and functional stability. No flashable ROM image has been built or flashed.
+Cases 1 through 4 and Case 5.1 are accepted. The local attempt 7 completed all
+12 Case 5.1 stages and verified its checkpoint; Case 5.2 has not started.
+Production signing remains deferred until physical boot and functional
+stability. No flashable ROM image has been built or flashed.
